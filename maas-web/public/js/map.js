@@ -51,6 +51,12 @@ export async function initMap() {
     L.polyline(line.pts, { color: COLOR[code] || COLOR.SIL, weight: 6, opacity: 0.9 })
       .bindTooltip(line.name, { sticky: true, className: 'lbl-line' }).addTo(layers.rail);
   });
+  // สายรถเมล์ที่จอดป้ายข้างสถานี (ป้ายรหัส B-<รหัสสถานี>)
+  const routesOf = (stopId) => routeStops.data.filter((r) => r.stop_id === stopId)
+    .map((r) => r.bus_routes.route_no).sort((a, b) => Number(a) - Number(b)).join(', ');
+  const busAt = {};
+  stops.data.forEach((b) => { if (b.stop_code.startsWith('B-')) busAt[b.stop_code.slice(2)] = routesOf(b.stop_id); });
+
   const linesOf = {};
   seqs.data.forEach((r) => { (linesOf[r.station_id] ||= []).push(r.lines.code); });
   stations.data.forEach((s) => {
@@ -60,7 +66,8 @@ export async function initMap() {
       radius: hub ? 9 : 6, color: hub ? '#17221f' : (COLOR[codes[0]] || COLOR.SIL),
       weight: hub ? 3.5 : 3, fillColor: '#fff', fillOpacity: 1,
     })
-      .bindTooltip(`${esc(s.station_name)}<small>${esc(s.station_code)}</small>`, {
+      .bindTooltip(`${esc(s.station_name)}<small>${esc(s.station_code)}</small>${busAt[s.station_code]
+        ? `<span class="lbl-busno">🚌 ${esc(busAt[s.station_code])}</span>` : ''}`, {
         // ตำแหน่งชื่อ: สายสีลมไว้ซ้าย, สถานีร่วมไว้บน, สายสุขุมวิทไว้ขวา (กันชื่อทับกันแถวสยาม)
         permanent: true,
         direction: hub ? 'top' : (codes.includes('SIL') ? 'left' : 'right'),
@@ -69,7 +76,8 @@ export async function initMap() {
       })
       .bindPopup(`<div class="pop"><span class="pop-kind pop-rail">🚆 สถานี BTS</span><strong>${esc(s.station_name)}</strong>
         <span>${esc(s.station_code)} · เขต${esc(s.locations.district)}</span>
-        <span>${codes.map((c) => (c === 'SUK' ? 'สายสุขุมวิท' : 'สายสีลม')).join(' · ')}</span></div>`)
+        <span>${codes.map((c) => (c === 'SUK' ? 'สายสุขุมวิท' : 'สายสีลม')).join(' · ')}</span>
+        ${busAt[s.station_code] ? `<span>🚌 ต่อรถเมล์สาย ${esc(busAt[s.station_code])}</span>` : ''}</div>`)
       .addTo(layers.rail);
   });
 
@@ -81,15 +89,20 @@ export async function initMap() {
     L.polyline(route.pts, { color: COLOR.busLine, weight: 3, opacity: 0.6, dashArray: '2 7', lineCap: 'round' })
       .bindTooltip(`รถเมล์สาย ${no} · ${route.name}`, { sticky: true, className: 'lbl-line' }).addTo(layers.bus);
   });
-  const routesOf = (stopId) => routeStops.data.filter((r) => r.stop_id === stopId).map((r) => r.bus_routes.route_no).join(', ');
+  const silom = new Set(seqs.data.filter((r) => r.lines.code === 'SIL').map((r) => r.station_id));
+  const stationOfCode = Object.fromEntries(stations.data.map((x) => [x.station_code, x.station_id]));
   stops.data.forEach((s) => {
     const major = s.stop_code.startsWith('H');         // ป้ายหลัก/ปลายสาย ที่ไม่อยู่ติด BTS
+    const onSilom = silom.has(stationOfCode[s.stop_code.slice(2)]);
+    const side = onSilom ? 'right' : 'left';          // สถานีสีลมชื่ออยู่ซ้าย → ชื่อป้ายไว้ขวา
     L.marker(stopPos[s.stop_id], {
       icon: L.divIcon({ className: `bus-pin${major ? ' bus-pin-major' : ''}`, html: major ? '🚌' : '', iconSize: major ? [26, 26] : [12, 12] }),
       zIndexOffset: major ? 500 : -100,
     })
       .bindTooltip(`${esc(s.stop_name.replace(/^ป้าย/, ''))}<small>สาย ${esc(routesOf(s.stop_id))}</small>`, {
-        permanent: true, direction: 'left', offset: [major ? -14 : -8, 0], className: `lbl lbl-bus${major ? ' lbl-bus-major' : ''}`,
+        // ป้ายอยู่ทางเหนือของสถานีเล็กน้อย → ชื่อป้ายไว้ด้านบน ห่างจากชื่อสถานี
+        permanent: true, direction: 'top', offset: [0, -8],
+        className: `lbl lbl-bus${major ? ' lbl-bus-major' : ''}${side === 'right' ? ' lbl-bus-right' : ''}`,
       })
       .bindPopup(`<div class="pop"><span class="pop-kind pop-bus">🚌 ป้ายรถเมล์</span><strong>${esc(s.stop_name)}</strong>
         <span>รถเมล์สาย ${esc(routesOf(s.stop_id)) || '–'}</span></div>`)
@@ -131,7 +144,8 @@ export async function initMap() {
       <span><i class="lg-dot"></i>สถานี · <i class="lg-dot lg-hub"></i>สถานีร่วม</span>
       <span><i class="lg-line lg-dash"></i>สายรถเมล์</span>
       <span><i class="lg-bus"></i>ป้ายรถเมล์ · ✈️ สนามบิน</span>
-      <em>ซูมเข้าเพื่อดูป้ายรถเมล์และชื่อป้าย</em>`;
+      <span><span class="lbl-busno">🚌 2, 25</span> สายรถเมล์ที่ต่อได้จากสถานี</span>
+      <em>ซูมเข้า 2 ระดับเพื่อดูชื่อป้ายรถเมล์</em>`;
     return div;
   };
   legend.addTo(map);

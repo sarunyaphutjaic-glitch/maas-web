@@ -541,6 +541,7 @@ dialog { border-radius: 18px; }
 .leaflet-container:not(.z12) .lbl-rail:not(.lbl-hub) { display: none; }
 .leaflet-container.z12 .lbl-bus-major { display: block; }
 .leaflet-container.z15 .lbl-bus { display: block; }
+.leaflet-container.z15 .leaflet-tooltip .lbl-busno { display: none; }
 .leaflet-tooltip.lbl-line { font-family: var(--font); font-weight: 600; border-radius: 8px; }
 .bus-pin { background: var(--bus); border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 .bus-pin-major { display: grid; place-items: center; font-size: 13px; background: #fff; border: 2px solid var(--bus); }
@@ -568,6 +569,11 @@ dialog { border-radius: 18px; }
 }
 
 /* ป้ายรถเมล์ข้างสถานี BTS ซ่อนจนกว่าจะซูมใกล้ ไม่ให้ทับสถานี */
-.leaflet-container:not(.z14) .bus-pin:not(.bus-pin-major) { display: none; }
+.leaflet-container:not(.z13) .bus-pin:not(.bus-pin-major) { display: none; }
 .lbl-sil { border-left: 0 !important; border-right: 3px solid #1d7a46 !important; }
 .lg-bus { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--bus); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--bus); margin-right: 5px; vertical-align: middle; }
+.lbl-busno { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 5px; background: #fff4d6; color: #8a5a00; font-size: 10px; font-weight: 600; }
+.lbl-hub .lbl-busno { background: rgba(255, 255, 255, 0.18); color: #ffe39a; }
+.lbl-bus-right { border-right: 0 !important; border-left: 3px solid var(--bus) !important; }
+.map-legend .lbl-busno { margin: 0 4px 0 0; }
+.lbl-bus { border-right: 0 !important; border-bottom: 2px solid var(--bus) !important; background: #fffaf0 !important; }
