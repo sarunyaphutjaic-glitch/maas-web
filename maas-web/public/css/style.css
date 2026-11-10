@@ -204,6 +204,74 @@ td.num, th.num { text-align: right; }
 #report-table { max-height: 520px; overflow: auto; }
 #report-table th { position: sticky; top: 0; background: var(--surface); }
 
+/* ---------- Dashboard แยก 3 โหมด ---------- */
+.mode-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.mode-card {
+  --c: var(--rail);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 1.15rem 1.1rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 2px rgba(23, 34, 31, 0.06);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+  overflow: hidden;
+}
+.mode-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--c); }
+.mode-card[data-mode="air"] { --c: var(--air); }
+.mode-card[data-mode="bus"] { --c: var(--bus); }
+.mode-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(23, 34, 31, 0.08); }
+.mode-card input { position: absolute; opacity: 0; pointer-events: none; }
+.mode-card:has(input:focus-visible) { outline: 3px solid var(--air); outline-offset: 2px; }
+.mode-card:has(input:checked) { border-color: var(--c); }
+.mode-card:not(:has(input:checked)) { opacity: 0.5; background: var(--paper); }
+.mode-card:not(:has(input:checked))::before { background: var(--rule); }
+.mode-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+.mode-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center; font-size: 1.3rem;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.mode-tick {
+  width: 22px; height: 22px; border-radius: 7px;
+  border: 2px solid var(--rule);
+  display: grid; place-items: center;
+}
+.mode-card:has(input:checked) .mode-tick { background: var(--c); border-color: var(--c); }
+.mode-card:has(input:checked) .mode-tick::after {
+  content: ""; width: 6px; height: 11px; margin-top: -2px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.mode-name { font-weight: 600; }
+.mode-total { font-size: 1.6rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.mode-sub { font-size: 0.85rem; color: var(--muted); }
+
+.dash-mode { --c: var(--rail); margin-bottom: 2.5rem; }
+.dash-mode[data-mode="air"] { --c: var(--air); }
+.dash-mode[data-mode="bus"] { --c: var(--bus); }
+.mode-title { display: flex; align-items: center; gap: 0.6rem; font-size: var(--step-2); margin-bottom: 1rem; }
+.mode-title .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent); }
+.dash-mode .panel { border-radius: 16px; }
+.dash-mode .panel h3 { font-size: var(--step-0); margin-bottom: 0.75rem; }
+.dash-empty { text-align: center; padding: 3rem 1rem; color: var(--muted); border: 2px dashed var(--rule); border-radius: 16px; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--c);
+}
+.kpi-label { display: block; font-size: 0.82rem; color: var(--muted); }
+.kpi-value { display: block; font-size: 1.45rem; font-weight: 700; line-height: 1.3; }
+.kpi-note { display: block; font-size: 0.78rem; color: var(--muted); }
+.chart-box.short { height: 200px; }
+
 /* ---------- จัดการข้อมูล (CRUD) ---------- */
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.75rem; }
 .panel-head h2 { margin-bottom: 0.1rem; }
@@ -303,11 +371,14 @@ dialog h2 { font-size: var(--step-1); }
   .route-map { max-width: 360px; }
   .shell { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
+  .mode-picker { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .msg, .msg-bot { max-width: 100%; width: 100%; }
   .sidenav { display: flex; overflow-x: auto; gap: 0.25rem; border-right: 0; border-bottom: 1px solid var(--rule); padding: 0.5rem; }
   .sidenav a { white-space: nowrap; margin: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mode-card:hover { transform: none; }
   * { transition: none !important; animation: none !important; }
 }

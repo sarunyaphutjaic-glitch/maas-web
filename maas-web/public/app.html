@@ -53,26 +53,88 @@
       <!-- หน้าที่จะทำในขั้นถัดไป -->
       <!-- ภาพรวม (Dashboard จาก View) -->
       <section id="page-dashboard" class="page hidden">
-        <h1>ภาพรวมรถไฟฟ้า</h1>
-        <p id="dash-scope" class="lead">ข้อมูลวันที่ 1 ต.ค. – 9 พ.ย. 2569</p>
+        <h1>ภาพรวม</h1>
+        <p id="dash-scope" class="lead">ข้อมูลวันที่ 1 ต.ค. – 9 พ.ย. 2569 · เลือกโหมดการเดินทางที่ต้องการดู</p>
 
-        <div class="panel">
-          <h2>รายได้รายวัน</h2>
-          <p id="daily-summary" class="empty"></p>
-          <div class="chart-box"><canvas id="chart-daily" aria-label="กราฟรายได้รายวัน" role="img"></canvas></div>
+        <!-- เลือกโหมด: แต่ละการ์ดเป็น checkbox -->
+        <div class="mode-picker" role="group" aria-label="เลือกโหมดการเดินทางที่จะแสดง">
+          <label class="mode-card" data-mode="rail">
+            <input type="checkbox" value="rail" checked>
+            <span class="mode-top"><span class="mode-icon" aria-hidden="true">🚆</span><span class="mode-tick" aria-hidden="true"></span></span>
+            <span class="mode-name">รถไฟฟ้า BTS</span>
+            <span class="mode-total" id="total-rail">–</span>
+            <span class="mode-sub" id="sub-rail">ยอดเติมเงินบัตร</span>
+          </label>
+          <label class="mode-card" data-mode="air">
+            <input type="checkbox" value="air" checked>
+            <span class="mode-top"><span class="mode-icon" aria-hidden="true">✈️</span><span class="mode-tick" aria-hidden="true"></span></span>
+            <span class="mode-name">สายการบิน</span>
+            <span class="mode-total" id="total-air">–</span>
+            <span class="mode-sub" id="sub-air">ยอดชำระค่าตั๋ว</span>
+          </label>
+          <label class="mode-card" data-mode="bus">
+            <input type="checkbox" value="bus" checked>
+            <span class="mode-top"><span class="mode-icon" aria-hidden="true">🚌</span><span class="mode-tick" aria-hidden="true"></span></span>
+            <span class="mode-name">รถเมล์</span>
+            <span class="mode-total" id="total-bus">–</span>
+            <span class="mode-sub" id="sub-bus">ยอดชำระค่าโดยสาร</span>
+          </label>
         </div>
 
-        <div class="grid-2">
+        <p id="dash-empty" class="dash-empty hidden">เลือกอย่างน้อย 1 โหมดเพื่อดูข้อมูล</p>
+
+        <!-- รถไฟฟ้า BTS -->
+        <section id="dash-rail" class="dash-mode" data-mode="rail">
+          <h2 class="mode-title"><span class="dot"></span>รถไฟฟ้า BTS</h2>
+          <div class="kpis" id="kpi-rail"></div>
           <div class="panel">
-            <h2>10 สถานีที่คนแตะบัตรเข้ามากที่สุด</h2>
-            <div class="chart-box tall"><canvas id="chart-stations" aria-label="กราฟสถานียอดนิยม" role="img"></canvas></div>
+            <h3>รายได้ค่าโดยสารรายวัน</h3>
+            <div class="chart-box"><canvas id="chart-daily" role="img" aria-label="กราฟรายได้รายวัน"></canvas></div>
           </div>
-          <div class="panel">
-            <h2>ค่าโดยสารรวมตามประเภทบัตร</h2>
-            <div class="chart-box"><canvas id="chart-cardtypes" aria-label="กราฟค่าโดยสารตามประเภทบัตร" role="img"></canvas></div>
-            <div id="cardtype-table" class="table-wrap"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>10 สถานีที่คนแตะบัตรเข้ามากที่สุด</h3>
+              <div class="chart-box tall"><canvas id="chart-stations" role="img" aria-label="กราฟสถานียอดนิยม"></canvas></div>
+            </div>
+            <div class="panel">
+              <h3>ค่าโดยสารรวมตามประเภทบัตร</h3>
+              <div class="chart-box short"><canvas id="chart-cardtypes" role="img" aria-label="กราฟค่าโดยสารตามประเภทบัตร"></canvas></div>
+              <div id="cardtype-table" class="table-wrap"></div>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <!-- สายการบิน -->
+        <section id="dash-air" class="dash-mode" data-mode="air">
+          <h2 class="mode-title"><span class="dot"></span>สายการบิน</h2>
+          <div class="kpis" id="kpi-air"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>รายได้ต่อเส้นทางบิน</h3>
+              <div class="chart-box tall"><canvas id="chart-routes" role="img" aria-label="กราฟรายได้ต่อเส้นทางบิน"></canvas></div>
+            </div>
+            <div class="panel">
+              <h3>สัดส่วนรายได้ตามชั้นโดยสาร</h3>
+              <div class="chart-box tall"><canvas id="chart-class" role="img" aria-label="กราฟสัดส่วนชั้นโดยสาร"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- รถเมล์ -->
+        <section id="dash-bus" class="dash-mode" data-mode="bus">
+          <h2 class="mode-title"><span class="dot"></span>รถเมล์</h2>
+          <div class="kpis" id="kpi-bus"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>ผู้โดยสารและความตรงเวลาต่อสาย</h3>
+              <div class="chart-box tall"><canvas id="chart-busroutes" role="img" aria-label="กราฟผู้โดยสารต่อสาย"></canvas></div>
+            </div>
+            <div class="panel">
+              <h3>ช่วงเวลาที่คนขึ้นรถเมล์</h3>
+              <div class="chart-box tall"><canvas id="chart-bushours" role="img" aria-label="กราฟการขึ้นรถตามชั่วโมง"></canvas></div>
+            </div>
+          </div>
+        </section>
       </section>
       <!-- จัดการข้อมูล (CRUD) -->
       <section id="page-manage" class="page hidden">
