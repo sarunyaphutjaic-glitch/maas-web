@@ -166,7 +166,27 @@
           <div id="report-table"></div>
         </div>
       </section>
-      <section id="page-chat" class="page hidden"><h1>ถามข้อมูล</h1><p class="empty">ระบบ Chat จะอยู่ที่นี่</p></section>
+      <!-- ถามข้อมูล (Chat + LLM) -->
+      <section id="page-chat" class="page hidden">
+        <h1>ถามข้อมูล</h1>
+        <p class="lead">พิมพ์คำถามเป็นภาษาไทยหรืออังกฤษ ระบบจะสร้าง SQL ดึงข้อมูลจริง แล้วตอบพร้อมหลักฐาน</p>
+
+        <div class="chat-suggest" aria-label="ตัวอย่างคำถาม">
+          <button type="button">สถานีไหนมีคนแตะบัตรเข้ามากที่สุด 5 อันดับ</button>
+          <button type="button">ผู้โดยสารคนไหนเดินทางบ่อยที่สุด และจ่ายค่าโดยสารรวมเท่าไร</button>
+          <button type="button">รายได้รวมและค่าโดยสารเฉลี่ยแยกตามประเภทบัตร</button>
+          <button type="button">มีเที่ยวที่ลืมแตะบัตรออกกี่เที่ยว</button>
+        </div>
+
+        <div class="panel chat-panel">
+          <div id="chat-log" class="chat-log" aria-live="polite"></div>
+          <form id="chat-form" class="chat-form">
+            <label for="chat-input" class="hidden">คำถาม</label>
+            <textarea id="chat-input" rows="2" maxlength="500" placeholder="เช่น วันไหนมีรายได้สูงสุด"></textarea>
+            <button id="chat-send" class="btn" type="submit">ถาม</button>
+          </form>
+        </div>
+      </section>
     </main>
   </div>
 

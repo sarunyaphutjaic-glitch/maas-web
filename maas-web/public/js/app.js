@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient.js';
 import { initDashboard } from './dashboard.js';
 import { initReports } from './reports.js';
 import { initManage } from './manage.js';
+import { initChat } from './chat.js';
 
 const $ = (id) => document.getElementById(id);
 const ROLE_TH = { admin: 'ผู้ดูแลระบบ', staff: 'เจ้าหน้าที่', passenger: 'ผู้โดยสาร' };
@@ -81,6 +82,7 @@ function route() {
   if (name === 'dashboard') initDashboard(profile);
   if (name === 'reports') initReports();
   if (name === 'manage') initManage(profile);
+  if (name === 'chat') initChat();
   document.querySelectorAll('.sidenav a').forEach((a) => {
     if (a.getAttribute('href') === '#' + name) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
