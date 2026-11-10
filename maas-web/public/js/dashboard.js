@@ -3,10 +3,10 @@ import { supabase } from './supabaseClient.js';
 // สีประจำโหมด (ตรงกับ css/style.css)
 const C = {
   ink: '#17221f', muted: '#5b6b66', rule: '#e3e9e6',
-  rail: '#2f9a52', air: '#2f67d8', bus: '#e0a116',
+  rail: '#2f9a52', air: '#2f67d8', bus: '#e0a116', all: '#7b5cd6',
   railSoft: 'rgba(47,154,82,0.14)', airSoft: 'rgba(47,103,216,0.14)', busSoft: 'rgba(224,161,22,0.18)',
 };
-const MODES = ['rail', 'air', 'bus'];
+const MODES = ['all', 'rail', 'air', 'bus'];
 const STORE_KEY = 'maas-dashboard-modes';
 
 const $ = (id) => document.getElementById(id);
@@ -19,8 +19,8 @@ Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.tooltip.padding = 10;
 Chart.defaults.plugins.tooltip.cornerRadius = 8;
 
-const charts = { rail: [], air: [], bus: [] };   // เก็บกราฟไว้ resize ตอนเปิดกลับมา
-const loaded = { rail: false, air: false, bus: false };
+const charts = { all: [], rail: [], air: [], bus: [] };   // เก็บกราฟไว้ resize ตอนเปิดกลับมา
+const loaded = { all: false, rail: false, air: false, bus: false };
 let started = false;
 
 // ---------- เริ่มต้นหน้า ----------
@@ -64,7 +64,9 @@ async function loadTotals() {
   if (error) return;
   const map = { RAIL_TOPUP: 'rail', FLIGHT: 'air', BUS: 'bus' };
   const label = { rail: 'ครั้งเติมเงิน', air: 'การจอง', bus: 'ครั้งขึ้นรถ' };
-  MODES.forEach((m) => {
+  $('total-all').textContent = fmt(sum(data, 'total_amount')) + ' ฿';
+  $('sub-all').textContent = `ชำระแล้ว ${fmt(sum(data, 'transactions'))} รายการ`;
+  ['rail', 'air', 'bus'].forEach((m) => {
     const rows = data.filter((r) => map[r.service_type] === m);
     $('total-' + m).textContent = fmt(sum(rows, 'total_amount')) + ' ฿';
     $('sub-' + m).textContent = `ชำระแล้ว ${fmt(sum(rows, 'transactions'))} ${label[m]}`;
@@ -251,4 +253,56 @@ async function loadBus() {
   } else showError('chart-bushours', rides.error);
 }
 
-const LOADERS = { rail: loadRail, air: loadAir, bus: loadBus };
+// =========================================================
+// รวมทุกโหมด (จากตารางกลาง payments)
+// =========================================================
+async function loadAll() {
+  const [pay, users] = await Promise.all([
+    supabase.from('v_payment_summary').select('month, service_type, transactions, total_amount').order('month'),
+    supabase.from('v_user_spending').select('*').order('total_spent', { ascending: false }),
+  ]);
+  const NAME = { RAIL_TOPUP: 'รถไฟฟ้า BTS', FLIGHT: 'สายการบิน', BUS: 'รถเมล์' };
+  const COL = { RAIL_TOPUP: C.rail, FLIGHT: C.air, BUS: C.bus };
+  const SERV = ['RAIL_TOPUP', 'FLIGHT', 'BUS'];
+
+  if (!pay.error && !users.error) {
+    const p = pay.data, u = users.data;
+    const total = sum(p, 'total_amount');
+    const active = u.filter((x) => Number(x.total_spent) > 0);
+    kpis('kpi-all', [
+      { label: 'รายได้รวมทุกโหมด', value: fmt(total) + ' ฿', note: 'เฉพาะรายการที่ชำระแล้ว' },
+      { label: 'จำนวนรายการชำระ', value: fmt(sum(p, 'transactions')) },
+      { label: 'ผู้ใช้ที่มีค่าใช้จ่าย', value: fmt(active.length) + ' คน' },
+      { label: 'ใช้ครบ 3 โหมด', value: fmt(u.filter((x) => x.modes_used === 3).length) + ' คน', note: 'BTS + เครื่องบิน + รถเมล์' },
+    ]);
+
+    const byServ = SERV.map((s) => sum(p.filter((x) => x.service_type === s), 'total_amount'));
+    make('all', 'chart-share', {
+      type: 'doughnut',
+      data: { labels: SERV.map((s) => NAME[s]), datasets: [{ data: byServ, backgroundColor: SERV.map((s) => COL[s]), borderWidth: 0, hoverOffset: 6 }] },
+      options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${fmt(ctx.raw)} ฿ (${fmt(total ? (100 * ctx.raw) / total : 0, 1)}%)` } } } },
+    });
+
+    const months = [...new Set(p.map((x) => x.month))].sort();
+    make('all', 'chart-monthly', {
+      type: 'bar',
+      data: { labels: months.map((m) => new Date(m).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })),
+        datasets: SERV.map((s) => ({ label: NAME[s], backgroundColor: COL[s], borderRadius: 4,
+          data: months.map((m) => sum(p.filter((x) => x.month === m && x.service_type === s), 'total_amount')) })) },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
+        scales: { x: { ...axisX, stacked: true }, y: { ...axisY, stacked: true } } },
+    });
+
+    const top = active.slice(0, 5), max = Number(top[0]?.total_spent || 1);
+    $('top-spenders').innerHTML = `<table class="spend-table">
+      <thead><tr><th>#</th><th>ผู้ใช้</th><th>สัดส่วนค่าใช้จ่าย</th><th class="num">BTS</th><th class="num">เครื่องบิน</th><th class="num">รถเมล์</th><th class="num">รวม</th></tr></thead>
+      <tbody>${top.map((x, i) => `<tr>
+        <td>${i + 1}</td><td>${x.full_name}</td>
+        <td><div class="spend-bar" style="width:${(100 * Number(x.total_spent)) / max}%">
+          <i style="flex:${Number(x.rail_topup)};background:${C.rail}"></i><i style="flex:${Number(x.flight)};background:${C.air}"></i><i style="flex:${Number(x.bus)};background:${C.bus}"></i></div></td>
+        <td class="num">${fmt(x.rail_topup)}</td><td class="num">${fmt(x.flight)}</td><td class="num">${fmt(x.bus)}</td><td class="num"><strong>${fmt(x.total_spent)} ฿</strong></td></tr>`).join('')}</tbody></table>`;
+  } else showError('chart-share', pay.error || users.error);
+}
+
+const LOADERS = { all: loadAll, rail: loadRail, air: loadAir, bus: loadBus };

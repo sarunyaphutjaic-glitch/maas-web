@@ -7,13 +7,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="mode-stripe"></div>
     <div class="topbar-inner">
-      <span class="brand">MaaS</span>
+      <a class="brand" href="#home" aria-label="MaaS หน้าแรก">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-text">MaaS<small>Mobility as a Service</small></span>
+      </a>
       <div class="who">
         <span id="who-name">กำลังโหลด…</span>
         <span id="who-role" class="role"></span>
@@ -24,11 +28,16 @@
 
   <div class="shell">
     <nav class="sidenav" aria-label="เมนูหลัก">
-      <a href="#home">บัญชีของฉัน</a>
-      <a href="#dashboard">ภาพรวม</a>
-      <a href="#manage">จัดการข้อมูล</a>
-      <a href="#reports">รายงาน</a>
-      <a href="#chat">ถามข้อมูล</a>
+      <span class="nav-label">ของฉัน</span>
+      <a href="#home"><span class="nav-icon" aria-hidden="true">👤</span>บัญชีของฉัน</a>
+      <a href="#planner"><span class="nav-icon" aria-hidden="true">🧭</span>วางแผนเดินทาง</a>
+      <a href="#map"><span class="nav-icon" aria-hidden="true">🗺️</span>แผนที่</a>
+      <span class="nav-label">ข้อมูลและรายงาน</span>
+      <a href="#dashboard"><span class="nav-icon" aria-hidden="true">📊</span>ภาพรวม</a>
+      <a href="#reports"><span class="nav-icon" aria-hidden="true">📋</span>รายงาน</a>
+      <a href="#chat"><span class="nav-icon" aria-hidden="true">💬</span>ถามข้อมูล</a>
+      <span class="nav-label">ผู้ดูแล</span>
+      <a href="#manage"><span class="nav-icon" aria-hidden="true">🛠️</span>จัดการข้อมูล</a>
     </nav>
 
     <main>
@@ -46,6 +55,7 @@
         </div>
         <div class="panel">
           <h2>บัตรโดยสารรถไฟฟ้า</h2>
+          <p class="empty">เติมเงินและแตะบัตรได้ที่นี่ ค่าโดยสารคำนวณและหักเงินอัตโนมัติด้วย Trigger ในฐานข้อมูล</p>
           <div id="cards-box"><p class="empty">กำลังโหลด…</p></div>
         </div>
       </section>
@@ -58,6 +68,13 @@
 
         <!-- เลือกโหมด: แต่ละการ์ดเป็น checkbox -->
         <div class="mode-picker" role="group" aria-label="เลือกโหมดการเดินทางที่จะแสดง">
+          <label class="mode-card mode-card-all" data-mode="all">
+            <input type="checkbox" value="all" checked>
+            <span class="mode-top"><span class="mode-icon" aria-hidden="true">💰</span><span class="mode-tick" aria-hidden="true"></span></span>
+            <span class="mode-name">รวมทุกโหมด</span>
+            <span class="mode-total" id="total-all">–</span>
+            <span class="mode-sub" id="sub-all">ยอดชำระทั้งหมด</span>
+          </label>
           <label class="mode-card" data-mode="rail">
             <input type="checkbox" value="rail" checked>
             <span class="mode-top"><span class="mode-icon" aria-hidden="true">🚆</span><span class="mode-tick" aria-hidden="true"></span></span>
@@ -82,6 +99,26 @@
         </div>
 
         <p id="dash-empty" class="dash-empty hidden">เลือกอย่างน้อย 1 โหมดเพื่อดูข้อมูล</p>
+
+        <!-- รวมทุกโหมด -->
+        <section id="dash-all" class="dash-mode" data-mode="all">
+          <h2 class="mode-title"><span class="dot"></span>รายได้รวมทุกโหมด</h2>
+          <div class="kpis" id="kpi-all"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>สัดส่วนรายได้ตามโหมด</h3>
+              <div class="chart-box tall"><canvas id="chart-share" role="img" aria-label="สัดส่วนรายได้ตามโหมด"></canvas></div>
+            </div>
+            <div class="panel">
+              <h3>รายได้รายเดือนแยกตามโหมด</h3>
+              <div class="chart-box tall"><canvas id="chart-monthly" role="img" aria-label="รายได้รายเดือนแยกตามโหมด"></canvas></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>ผู้ใช้ที่ใช้จ่ายสูงสุด 5 อันดับ</h3>
+            <div id="top-spenders" class="table-wrap"></div>
+          </div>
+        </section>
 
         <!-- รถไฟฟ้า BTS -->
         <section id="dash-rail" class="dash-mode" data-mode="rail">
@@ -136,6 +173,38 @@
           </div>
         </section>
       </section>
+      <!-- วางแผนเดินทางข้ามระบบ -->
+      <section id="page-planner" class="page hidden">
+        <h1>วางแผนเดินทาง</h1>
+        <p class="lead">เลือกเที่ยวบินที่ลงกรุงเทพ แล้วเลือกปลายทาง ระบบจะต่อ BTS หรือรถเมล์ให้ พร้อมเวลาและค่าใช้จ่ายรวม</p>
+        <form id="plan-form" class="panel plan-form">
+          <div class="field"><label for="plan-flight">✈️ เที่ยวบิน (ลงสุวรรณภูมิหรือดอนเมือง)</label><select id="plan-flight"></select></div>
+          <div class="field"><label for="plan-dest">📍 ปลายทาง</label><select id="plan-dest"></select></div>
+          <div class="field"><label for="plan-card">💳 บัตร BTS</label>
+            <select id="plan-card"><option value="Adult">Adult (ไม่มีส่วนลด)</option><option value="Student">Student (ลด 10%)</option><option value="Senior">Senior (ลด 50%)</option></select></div>
+          <button id="plan-submit" class="btn" type="submit">คำนวณเส้นทาง</button>
+        </form>
+        <div id="plan-result"></div>
+      </section>
+
+      <!-- แผนที่ -->
+      <section id="page-map" class="page hidden">
+        <h1>แผนที่ระบบขนส่ง</h1>
+        <p id="map-note" class="lead">กำลังโหลด…</p>
+        <div class="map-toolbar">
+          <div id="map-layers" class="map-layers" role="group" aria-label="ชั้นข้อมูลบนแผนที่">
+            <label class="chip chip-rail"><input type="checkbox" value="rail" checked> 🚆 รถไฟฟ้า BTS</label>
+            <label class="chip chip-bus"><input type="checkbox" value="bus" checked> 🚌 รถเมล์</label>
+            <label class="chip chip-air"><input type="checkbox" value="air" checked> ✈️ สนามบิน</label>
+          </div>
+          <div class="map-zoom">
+            <button id="map-bkk" class="btn btn-ghost" type="button">กรุงเทพ</button>
+            <button id="map-all" class="btn btn-ghost" type="button">ทั้งประเทศ</button>
+          </div>
+        </div>
+        <div id="map" class="map-box" role="region" aria-label="แผนที่สถานี ป้ายรถเมล์ และสนามบิน"></div>
+      </section>
+
       <!-- จัดการข้อมูล (CRUD) -->
       <section id="page-manage" class="page hidden">
         <h1>จัดการข้อมูล</h1>
@@ -144,6 +213,8 @@
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" id="mtab-stations" aria-selected="true" aria-controls="mpanel-stations">สถานี</button>
           <button class="tab" role="tab" id="mtab-cards" aria-selected="false" aria-controls="mpanel-cards">บัตรโดยสาร</button>
+          <button class="tab" role="tab" id="mtab-flights" aria-selected="false" aria-controls="mpanel-flights">✈️ เที่ยวบิน</button>
+          <button class="tab" role="tab" id="mtab-schedules" aria-selected="false" aria-controls="mpanel-schedules">🚌 ตารางเดินรถ</button>
         </div>
 
         <div id="manage-msg" class="notice hidden" role="status" aria-live="polite"></div>
@@ -167,6 +238,9 @@
           </div>
           <div id="cards-table"><p class="empty">กำลังโหลด…</p></div>
         </div>
+
+        <div id="mpanel-flights" class="panel hidden" role="tabpanel"><div id="crud-flights"></div></div>
+        <div id="mpanel-schedules" class="panel hidden" role="tabpanel"><div id="crud-schedules"></div></div>
 
         <!-- ฟอร์มสถานี -->
         <dialog id="dlg-station" aria-labelledby="dlg-station-title">
@@ -256,6 +330,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

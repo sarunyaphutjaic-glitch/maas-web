@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js';
+import { createCrud, FLIGHTS, SCHEDULES } from './crud.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -10,6 +11,7 @@ let role = 'passenger';
 let stations = [];
 let cards = [];
 let loaded = false;
+const crudStarted = { flights: false, schedules: false };
 
 // ---------- แปล error จากฐานข้อมูลเป็นภาษาไทย ----------
 function thaiDbError(err) {
@@ -48,6 +50,8 @@ export function initManage(profile) {
 
   $('mtab-stations').addEventListener('click', () => selectTab('stations'));
   $('mtab-cards').addEventListener('click', () => selectTab('cards'));
+  $('mtab-flights').addEventListener('click', () => selectTab('flights'));
+  $('mtab-schedules').addEventListener('click', () => selectTab('schedules'));
 
   $('btn-add-station').addEventListener('click', () => openStationDialog());
   $('form-station').addEventListener('submit', saveStation);
@@ -66,7 +70,9 @@ export function initManage(profile) {
 }
 
 function selectTab(which) {
-  ['stations', 'cards'].forEach((t) => {
+  if (which === 'flights' && !crudStarted.flights) { crudStarted.flights = true; createCrud(FLIGHTS, role, notify); }
+  if (which === 'schedules' && !crudStarted.schedules) { crudStarted.schedules = true; createCrud(SCHEDULES, role, notify); }
+  ['stations', 'cards', 'flights', 'schedules'].forEach((t) => {
     $('mtab-' + t).setAttribute('aria-selected', String(t === which));
     $('mpanel-' + t).classList.toggle('hidden', t !== which);
   });
