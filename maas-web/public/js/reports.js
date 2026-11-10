@@ -7,6 +7,19 @@ const VIEWS = [
   { name: 'v_daily_rail_revenue', label: 'รายได้รถไฟฟ้ารายวัน',          order: 'trip_date',  asc: false },
   { name: 'v_card_type_stats',    label: 'สถิติตามประเภทบัตร',           order: 'total_fare', asc: false },
   { name: 'v_problem_trips',      label: 'เที่ยวที่มีปัญหา',              order: 'entry_time', asc: false },
+  // สายการบิน (สมาชิกคนที่ 1)
+  { name: 'v_flight_bookings',    label: 'สายการบิน: รายละเอียดตั๋ว',       order: 'departure_time', asc: false },
+  { name: 'v_route_revenue',      label: 'สายการบิน: รายได้ต่อเส้นทาง',      order: 'revenue',        asc: false },
+  { name: 'v_flight_occupancy',   label: 'สายการบิน: อัตราที่นั่งเต็ม',        order: 'departure_time', asc: false },
+  // รถเมล์ (สมาชิกคนที่ 3)
+  { name: 'v_bus_ride_details',   label: 'รถเมล์: การขึ้นรถแต่ละครั้ง',       order: 'boarded_at',     asc: false },
+  { name: 'v_route_ridership',    label: 'รถเมล์: สรุปรายสาย',             order: 'passengers',     asc: false },
+  { name: 'v_driver_workload',    label: 'รถเมล์: ภาระงานคนขับ',           order: 'completed_trips', asc: false },
+  { name: 'v_bus_route_stops',    label: 'รถเมล์: ป้ายของแต่ละสาย',         order: 'route_no',       asc: true },
+  { name: 'v_bus_stops_near_bts', label: 'ข้ามระบบ: ป้ายรถเมล์ใกล้สถานี BTS', order: 'distance_m',     asc: true },
+  // ข้ามทั้ง 3 ระบบ (ตารางกลาง)
+  { name: 'v_user_spending',      label: 'ข้ามระบบ: ค่าใช้จ่ายของผู้ใช้ทุกโหมด', order: 'total_spent',    asc: false },
+  { name: 'v_payment_summary',    label: 'ข้ามระบบ: สรุปการชำระเงินรายเดือน', order: 'month',          asc: true },
 ];
 const MAX_ROWS = 500;
 
