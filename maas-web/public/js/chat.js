@@ -8,9 +8,36 @@ const STATUS_TH = { SUCCESS: 'ตอบจากข้อมูลจริง',
 let loaded = false;
 let busy = false;
 
-export function initChat() {
+const SUGGEST = {
+  passenger: [
+    'จากสยามไปอโศกค่าโดยสารเท่าไร',
+    'ฉันเดินทาง BTS ไปกี่เที่ยว จ่ายไปเท่าไร',
+    'รถเมล์สายไหนผ่านป้ายอโศก',
+    'ลงรถไฟฟ้าที่หมอชิต ต่อรถเมล์สายไหนได้บ้าง',
+    'เที่ยวบินไปเชียงใหม่มีวันไหนบ้าง',
+    'ฉันใช้จ่ายค่าเดินทางรวมเท่าไร',
+  ],
+  admin: [
+    'สถานีไหนมีคนแตะบัตรเข้ามากที่สุด 5 อันดับ',
+    'ผู้โดยสารคนไหนเดินทางบ่อยที่สุด และจ่ายค่าโดยสารรวมเท่าไร',
+    'รายได้รวมและค่าโดยสารเฉลี่ยแยกตามประเภทบัตร',
+    'มีเที่ยวที่ลืมแตะบัตรออกกี่เที่ยว',
+    'เส้นทางบินไหนทำรายได้สูงสุด',
+    'ลงรถไฟฟ้าที่อโศก ต่อรถเมล์สายไหนได้บ้าง',
+    'ใครใช้จ่ายรวมทุกโหมดการเดินทางมากที่สุด',
+  ],
+};
+
+export function initChat(profile) {
   if (loaded) return;
   loaded = true;
+
+  const role = profile?.role === 'admin' || profile?.role === 'staff' ? 'admin' : 'passenger';
+  $('chat-suggest').innerHTML = SUGGEST[role].map((q) => `<button type="button">${esc(q)}</button>`).join('');
+  if (role === 'passenger') {
+    $('chat-input').placeholder = 'เช่น จากหมอชิตไปสยามค่าโดยสารเท่าไร';
+    $('chat-lead').textContent = 'ถามได้เรื่องค่าโดยสาร เที่ยวบิน สายรถเมล์ และข้อมูลการเดินทางของคุณเอง (ข้อมูลภาพรวมของระบบดูได้เฉพาะผู้ดูแล)';
+  }
 
   $('chat-form').addEventListener('submit', (e) => {
     e.preventDefault();

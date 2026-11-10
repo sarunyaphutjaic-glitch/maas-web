@@ -20,6 +20,7 @@ export async function initMap() {
     const z = map.getZoom(), el = map.getContainer();
     el.classList.toggle('z12', z >= 12);
     el.classList.toggle('z13', z >= 13);
+    el.classList.toggle('z14', z >= 14);
     el.classList.toggle('z15', z >= 15);
   };
   map.on('zoomend', zoomClass);
@@ -129,8 +130,8 @@ export async function initMap() {
       <span><i class="lg-line" style="background:${COLOR.SIL}"></i>BTS สายสีลม</span>
       <span><i class="lg-dot"></i>สถานี · <i class="lg-dot lg-hub"></i>สถานีร่วม</span>
       <span><i class="lg-line lg-dash"></i>สายรถเมล์</span>
-      <span>🚌 ป้ายหลัก · ✈️ สนามบิน</span>
-      <em>ซูมเข้าเพื่อดูชื่อป้ายรถเมล์ทุกป้าย</em>`;
+      <span><i class="lg-bus"></i>ป้ายรถเมล์ · ✈️ สนามบิน</span>
+      <em>ซูมเข้าเพื่อดูป้ายรถเมล์และชื่อป้าย</em>`;
     return div;
   };
   legend.addTo(map);

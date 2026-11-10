@@ -124,64 +124,59 @@ CREATE INDEX IF NOT EXISTS idx_rides_schedule      ON bus_rides(schedule_id);
 
 -- #####################################################################
 -- ส่วนที่ 2: ข้อมูลจำลอง
--- routes 6, stops 38, buses 12, drivers 12, schedules 120, trip_logs ~114, rides 180
+-- routes 6, stops 30 (รอบสถานี BTS), buses 12, drivers 12, schedules 120, trip_logs ~114, rides 180
 -- #####################################################################
 SELECT setseed(0.303);
 
--- 2.1 สายรถเมล์
+-- 2.1 สายรถเมล์ (เลขสายจริงที่วิ่งผ่านถนนแนวรถไฟฟ้า BTS)
+--     ข้อมูลจำลอง: เลขสายและถนนอ้างอิงเส้นทางจริง แต่ลำดับป้ายย่อเหลือเฉพาะป้ายรอบสถานี BTS
 INSERT INTO bus_routes (route_no, route_name, fare) VALUES
-    ('2',   'สำโรง – ปากคลองตลาด',          15),
-    ('77',  'สถานีขนส่งหมอชิต 2 – สาธุประดิษฐ์', 20),
-    ('29',  'รังสิต – หัวลำโพง',             25),
-    ('511', 'สายใต้ใหม่ – ปากน้ำ',           20),
-    ('15',  'สนามหลวง – สยาม',              10),
-    ('40',  'หัวลำโพง – เอกมัย',             13);
+    ('2',  'สำโรง – ปากคลองตลาด (ถ.สุขุมวิท, พระราม 1)', 15),
+    ('25', 'ปากน้ำ – ท่าช้าง (ถ.สุขุมวิท, พระราม 1)',     13),
+    ('29', 'รังสิต – หัวลำโพง (ถ.พหลโยธิน, พญาไท)',       15),
+    ('77', 'หมอชิต 2 – สาธุประดิษฐ์ (ถ.พหลโยธิน, สีลม)',   20),
+    ('15', 'บางกะปิ – ท่าพระ (ถ.ราชดำริ, สีลม)',          13),
+    ('76', 'แสมดำ – ประตูน้ำ (ถ.สาทร, สีลม)',             13);
 
--- 2.2 ป้ายรถเมล์
--- 30 ป้ายตั้งห่างจากสถานี BTS ประมาณ 70–100 เมตร (รหัส B-<รหัสสถานี>) → ใช้หาป้ายใกล้สถานี
-WITH s AS (
-    SELECT st.station_code, st.station_name, l.latitude + 0.0006 AS lat, l.longitude + 0.0004 AS lon, l.district
-    FROM stations st JOIN locations l USING (location_id)
-),
-ins AS (
-    INSERT INTO locations (location_name, location_type, latitude, longitude, district)
-    SELECT 'ป้ายรถเมล์ ' || station_name, 'BUS_STOP', lat, lon, district FROM s
-    RETURNING location_id, location_name
-)
-INSERT INTO bus_stops (stop_code, stop_name, location_id)
-SELECT 'B-' || s.station_code, 'ป้าย' || s.station_name, ins.location_id
-FROM s JOIN ins ON ins.location_name = 'ป้ายรถเมล์ ' || s.station_name;
-
--- 8 ป้ายที่ไม่อยู่ใกล้ BTS
-WITH h(code, name, lat, lon, district) AS (
+-- 2.2 ป้ายรถเมล์ 30 ป้าย อยู่รอบสถานี BTS ทุกสถานี (ห่างประมาณ 70–100 เมตร)
+--     ชื่อป้ายตามสถานที่สำคัญจริงหน้าสถานี, รหัสป้าย B-<รหัสสถานี> ใช้จับคู่กับสถานี
+WITH n(code, stop_name) AS (
     VALUES
-    ('H1', 'หัวลำโพง',             13.738800, 100.517000, 'ปทุมวัน'),
-    ('H2', 'สนามหลวง',             13.755300, 100.493000, 'พระนคร'),
-    ('H3', 'ปากคลองตลาด',          13.739700, 100.498700, 'พระนคร'),
-    ('H4', 'ปากน้ำ',               13.599000, 100.596800, 'เมืองสมุทรปราการ'),
-    ('H5', 'สำโรง',                13.646000, 100.596000, 'บางพลี'),
-    ('H6', 'รังสิต',               13.989000, 100.617000, 'ธัญบุรี'),
-    ('H7', 'สถานีขนส่งหมอชิต 2',    13.813000, 100.548000, 'จตุจักร'),
-    ('H8', 'สถานีขนส่งสายใต้ใหม่',   13.784000, 100.406000, 'ตลิ่งชัน')
+    ('N8', 'ป้ายสวนจตุจักร'),        ('N7', 'ป้ายสะพานควาย'),        ('N5', 'ป้ายซอยอารีย์'),
+    ('N4', 'ป้ายกองทัพบก'),          ('N3', 'ป้ายอนุสาวรีย์ชัยฯ'),     ('N2', 'ป้ายพญาไท'),
+    ('N1', 'ป้ายราชเทวี'),           ('CEN', 'ป้ายสยามพารากอน'),     ('E1', 'ป้ายเซ็นทรัลชิดลม'),
+    ('E2', 'ป้ายเพลินจิต'),           ('E3', 'ป้ายสุขุมวิท ซอย 3'),     ('E4', 'ป้ายอโศก (เทอร์มินอล 21)'),
+    ('E5', 'ป้ายเอ็มโพเรียม'),        ('E6', 'ป้ายทองหล่อ'),           ('E7', 'ป้ายเอกมัย (ขนส่งตะวันออก)'),
+    ('E8', 'ป้ายพระโขนง'),           ('E9', 'ป้ายอ่อนนุช'),           ('E10', 'ป้ายบางจาก'),
+    ('E11', 'ป้ายปุณณวิถี'),          ('E12', 'ป้ายอุดมสุข'),          ('E13', 'ป้ายบางนา'),
+    ('E14', 'ป้ายแบริ่ง'),            ('W1', 'ป้าย MBK'),             ('S1', 'ป้ายราชดำริ'),
+    ('S2', 'ป้ายศาลาแดง (สีลม)'),     ('S3', 'ป้ายช่องนนทรี'),         ('S4', 'ป้ายเซนต์หลุยส์'),
+    ('S5', 'ป้ายสุรศักดิ์'),           ('S6', 'ป้ายสะพานตากสิน'),       ('S7', 'ป้ายกรุงธนบุรี')
+),
+s AS (
+    SELECT n.code, n.stop_name, l.latitude + 0.0006 AS lat, l.longitude + 0.0004 AS lon, l.district
+    FROM n
+    JOIN stations st ON st.station_code = n.code
+    JOIN locations l ON l.location_id = st.location_id
 ),
 ins AS (
     INSERT INTO locations (location_name, location_type, latitude, longitude, district)
-    SELECT 'ป้ายรถเมล์ ' || name, 'BUS_STOP', lat, lon, district FROM h
+    SELECT 'ป้ายรถเมล์ ' || code || ' ' || stop_name, 'BUS_STOP', lat, lon, district FROM s
     RETURNING location_id, location_name
 )
 INSERT INTO bus_stops (stop_code, stop_name, location_id)
-SELECT h.code, 'ป้าย' || h.name, ins.location_id
-FROM h JOIN ins ON ins.location_name = 'ป้ายรถเมล์ ' || h.name;
+SELECT 'B-' || s.code, s.stop_name, ins.location_id
+FROM s JOIN ins ON ins.location_name = 'ป้ายรถเมล์ ' || s.code || ' ' || s.stop_name;
 
--- 2.3 ลำดับป้ายของแต่ละสาย
+-- 2.3 ลำดับป้ายของแต่ละสาย (เฉพาะช่วงที่ผ่านแนว BTS)
 WITH r(route_no, stops) AS (
     VALUES
-    ('2',   ARRAY['H5','B-E14','B-E13','B-E12','B-E11','B-E10','B-E9','B-E8','B-E7','B-E6','B-E5','B-E4','B-E3','B-E2','B-E1','B-CEN','B-W1','H3']),
-    ('77',  ARRAY['H7','B-N8','B-N7','B-N5','B-N4','B-N3','B-N2','B-N1','B-CEN','B-S1','B-S2','B-S3','B-S5']),
-    ('29',  ARRAY['H6','H7','B-N8','B-N3','B-N1','H1']),
-    ('511', ARRAY['H8','H2','B-W1','B-CEN','B-E1','B-E4','B-E9','B-E14','H4']),
-    ('15',  ARRAY['H2','H3','B-S7','B-S6','B-S4','B-S2','B-S1','B-CEN']),
-    ('40',  ARRAY['H1','B-W1','B-CEN','B-E2','B-E3','B-E4','B-E5','B-E6','B-E7'])
+    ('2',  ARRAY['B-E14','B-E13','B-E12','B-E11','B-E10','B-E9','B-E8','B-E7','B-E6','B-E5','B-E4','B-E3','B-E2','B-E1','B-CEN','B-W1']),
+    ('25', ARRAY['B-E13','B-E9','B-E7','B-E5','B-E4','B-E2','B-E1','B-CEN','B-W1']),
+    ('29', ARRAY['B-N8','B-N7','B-N5','B-N4','B-N3','B-N2','B-W1']),
+    ('77', ARRAY['B-N8','B-N7','B-N5','B-N3','B-N1','B-S1','B-S2','B-S3','B-S5']),
+    ('15', ARRAY['B-E1','B-S1','B-S2','B-S3','B-S5','B-S6']),
+    ('76', ARRAY['B-S7','B-S6','B-S5','B-S4','B-S3','B-S2','B-S1','B-CEN'])
 )
 INSERT INTO route_stops (route_id, stop_id, sequence_no)
 SELECT br.route_id, bs.stop_id, x.seq
@@ -208,16 +203,19 @@ FROM unnest(ARRAY[
 ]) WITH ORDINALITY AS n(name, i);
 
 -- 2.6 ตารางเดินรถ 120 รอบ (40 วัน × 3 รอบ/วัน กระจายทุกสาย)
---     รถคันที่ k วิ่งสาย ((k-1) % 6) + 1 และสลับคนขับ
+--     รถคันที่ k วิ่งสายลำดับที่ ((k-1) % 6) + 1 และสลับคนขับ (อ้างด้วยลำดับ ไม่ผูกกับเลข id)
+WITH r AS (SELECT route_id, row_number() OVER (ORDER BY route_id) AS rn FROM bus_routes),
+     b AS (SELECT bus_id, row_number() OVER (ORDER BY bus_id) AS rn FROM buses),
+     d AS (SELECT driver_id, row_number() OVER (ORDER BY driver_id) AS rn FROM drivers)
 INSERT INTO bus_schedules (route_id, bus_id, driver_id, departure_time)
-SELECT r.route_id,
-       ((n - 1) % 12) + 1                                        AS bus_id,
-       ((n + (n / 12)) % 12) + 1                                 AS driver_id,
+SELECT r.route_id, b.bus_id, d.driver_id,
        ((DATE '2026-10-01' + (n - 1) / 3)
          + make_interval(hours => (ARRAY[6, 12, 17])[1 + (n - 1) % 3], mins => (n * 7) % 60))
          AT TIME ZONE 'Asia/Bangkok'
 FROM generate_series(1, 120) AS n
-JOIN bus_routes r ON r.route_id = (((n - 1) % 12) % 6) + 1;
+JOIN b ON b.rn = ((n - 1) % 12) + 1
+JOIN r ON r.rn = (((n - 1) % 12) % 6) + 1
+JOIN d ON d.rn = ((n + (n / 12)) % 12) + 1;
 
 -- 2.7 บันทึกการวิ่งจริง: ~5% ถูกยกเลิก (ไม่มีบันทึก), ที่เหลือออกช้า 0–15 นาที
 INSERT INTO trip_logs (schedule_id, actual_departure, actual_arrival)

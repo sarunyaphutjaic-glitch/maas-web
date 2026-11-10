@@ -47,14 +47,25 @@ window.currentUser = profile;
 
 // ---------- 4. สลับหน้าตามเมนู (#home, #dashboard, ...) ----------
 const PAGES = ['home', 'dashboard', 'planner', 'map', 'manage', 'reports', 'chat'];
+// หน้าที่จำกัดสิทธิ์ (หน้าที่ไม่อยู่ในนี้ทุกคนเข้าได้)
+const ACCESS = { dashboard: ['admin'], reports: ['admin'], manage: ['admin', 'staff'] };
+const myRole = profile?.role ?? 'passenger';
+const canSee = (page) => !ACCESS[page] || ACCESS[page].includes(myRole);
+document.querySelectorAll('[data-roles]').forEach((el) => {
+  el.classList.toggle('hidden', !el.dataset.roles.split(' ').includes(myRole));
+});
 function route() {
-  const name = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+  let name = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+  if (!canSee(name)) {            // ไม่มีสิทธิ์ → กลับหน้าบัญชีของฉัน
+    name = 'home';
+    history.replaceState(null, '', '#home');
+  }
   PAGES.forEach((p) => $('page-' + p).classList.toggle('hidden', p !== name));
   // โหลดข้อมูลของแต่ละหน้าครั้งแรกที่เปิด
   if (name === 'dashboard') initDashboard(profile);
   if (name === 'reports') initReports();
   if (name === 'manage') initManage(profile);
-  if (name === 'chat') initChat();
+  if (name === 'chat') initChat(profile);
   if (name === 'planner') initPlanner();
   if (name === 'map') initMap();
   document.querySelectorAll('.sidenav a').forEach((a) => {

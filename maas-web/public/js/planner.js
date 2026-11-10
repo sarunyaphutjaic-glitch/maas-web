@@ -41,7 +41,7 @@ export async function initPlanner() {
   $('plan-dest').innerHTML = `
     <optgroup label="สถานีรถไฟฟ้า BTS">${stations.data.map((s) =>
       `<option value="STATION:${s.station_id}">${esc(s.station_name)} (${esc(s.station_code)})</option>`).join('')}</optgroup>
-    <optgroup label="ป้ายรถเมล์ (ต่อ BTS + รถเมล์)">${stops.data.filter((s) => s.stop_code.startsWith('H')).map((s) =>
+    <optgroup label="ป้ายรถเมล์ (ต่อ BTS + รถเมล์)">${stops.data.map((s) =>
       `<option value="BUS_STOP:${s.stop_id}">${esc(s.stop_name)}</option>`).join('')}</optgroup>`;
 
   $('plan-form').addEventListener('submit', (e) => { e.preventDefault(); plan(); });

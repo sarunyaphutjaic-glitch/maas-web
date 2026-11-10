@@ -32,12 +32,11 @@
       <a href="#home"><span class="nav-icon" aria-hidden="true">👤</span>บัญชีของฉัน</a>
       <a href="#planner"><span class="nav-icon" aria-hidden="true">🧭</span>วางแผนเดินทาง</a>
       <a href="#map"><span class="nav-icon" aria-hidden="true">🗺️</span>แผนที่</a>
-      <span class="nav-label">ข้อมูลและรายงาน</span>
-      <a href="#dashboard"><span class="nav-icon" aria-hidden="true">📊</span>ภาพรวม</a>
-      <a href="#reports"><span class="nav-icon" aria-hidden="true">📋</span>รายงาน</a>
       <a href="#chat"><span class="nav-icon" aria-hidden="true">💬</span>ถามข้อมูล</a>
-      <span class="nav-label">ผู้ดูแล</span>
-      <a href="#manage"><span class="nav-icon" aria-hidden="true">🛠️</span>จัดการข้อมูล</a>
+      <span class="nav-label" data-roles="admin staff">ผู้ดูแลระบบ</span>
+      <a href="#dashboard" data-roles="admin"><span class="nav-icon" aria-hidden="true">📊</span>ภาพรวม</a>
+      <a href="#reports" data-roles="admin"><span class="nav-icon" aria-hidden="true">📋</span>รายงาน</a>
+      <a href="#manage" data-roles="admin staff"><span class="nav-icon" aria-hidden="true">🛠️</span>จัดการข้อมูล</a>
     </nav>
 
     <main>
@@ -305,17 +304,9 @@
       <!-- ถามข้อมูล (Chat + LLM) -->
       <section id="page-chat" class="page hidden">
         <h1>ถามข้อมูล</h1>
-        <p class="lead">พิมพ์คำถามเป็นภาษาไทยหรืออังกฤษ ระบบจะสร้าง SQL ดึงข้อมูลจริง แล้วตอบพร้อมหลักฐาน</p>
+        <p id="chat-lead" class="lead">พิมพ์คำถามเป็นภาษาไทยหรืออังกฤษ ระบบจะสร้าง SQL ดึงข้อมูลจริง แล้วตอบพร้อมหลักฐาน</p>
 
-        <div class="chat-suggest" aria-label="ตัวอย่างคำถาม">
-          <button type="button">สถานีไหนมีคนแตะบัตรเข้ามากที่สุด 5 อันดับ</button>
-          <button type="button">ผู้โดยสารคนไหนเดินทางบ่อยที่สุด และจ่ายค่าโดยสารรวมเท่าไร</button>
-          <button type="button">รายได้รวมและค่าโดยสารเฉลี่ยแยกตามประเภทบัตร</button>
-          <button type="button">มีเที่ยวที่ลืมแตะบัตรออกกี่เที่ยว</button>
-          <button type="button">เส้นทางบินไหนทำรายได้สูงสุด</button>
-          <button type="button">ลงรถไฟฟ้าที่อโศก ต่อรถเมล์สายไหนได้บ้าง</button>
-          <button type="button">ใครใช้จ่ายรวมทุกโหมดการเดินทางมากที่สุด</button>
-        </div>
+        <div id="chat-suggest" class="chat-suggest" aria-label="ตัวอย่างคำถาม"></div>
 
         <div class="panel chat-panel">
           <div id="chat-log" class="chat-log" aria-live="polite"></div>

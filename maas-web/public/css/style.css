@@ -568,5 +568,6 @@ dialog { border-radius: 18px; }
 }
 
 /* ป้ายรถเมล์ข้างสถานี BTS ซ่อนจนกว่าจะซูมใกล้ ไม่ให้ทับสถานี */
-.leaflet-container:not(.z15) .bus-pin:not(.bus-pin-major) { display: none; }
+.leaflet-container:not(.z14) .bus-pin:not(.bus-pin-major) { display: none; }
 .lbl-sil { border-left: 0 !important; border-right: 3px solid #1d7a46 !important; }
+.lg-bus { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--bus); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--bus); margin-right: 5px; vertical-align: middle; }
