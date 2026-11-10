@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เข้าสู่ระบบ | MaaS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-page">
+  <div class="mode-stripe"></div>
+
+  <div class="auth-layout">
+    <!-- ฝั่งซ้าย: แผนผังเส้นทาง 3 โหมดมาบรรจบกัน -->
+    <section class="auth-map">
+      <div>
+        <h1>เดินทางทุกโหมด<br>ในบัญชีเดียว</h1>
+        <p>เครื่องบิน รถไฟฟ้า และรถเมล์ รวมข้อมูลการเดินทาง การชำระเงิน และสถิติไว้ที่เดียว</p>
+      </div>
+
+      <svg class="route-map" viewBox="0 0 520 250" role="img"
+           aria-label="แผนผังเส้นทางเครื่องบิน รถไฟฟ้า และรถเมล์ มาบรรจบที่ศูนย์กลาง">
+        <g fill="none" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M30 40 H250 Q300 40 330 90 L380 125" stroke="#2f67d8"/>
+          <path d="M30 125 H380" stroke="#2f9a52"/>
+          <path d="M30 210 H250 Q300 210 330 160 L380 125" stroke="#e0a116"/>
+        </g>
+        <g fill="#17221f" stroke="#fff" stroke-width="4">
+          <circle cx="30" cy="40" r="9"/><circle cx="160" cy="40" r="9"/>
+          <circle cx="30" cy="125" r="9"/><circle cx="130" cy="125" r="9"/><circle cx="230" cy="125" r="9"/>
+          <circle cx="30" cy="210" r="9"/><circle cx="110" cy="210" r="9"/><circle cx="190" cy="210" r="9"/>
+        </g>
+        <circle cx="405" cy="125" r="34" fill="#fff"/>
+        <text x="405" y="131" text-anchor="middle" style="fill:#17221f;font-weight:700;font-size:17px">MaaS</text>
+        <text x="30" y="20">สนามบิน</text>
+        <text x="30" y="105">สถานีรถไฟฟ้า</text>
+        <text x="30" y="243">ป้ายรถเมล์</text>
+      </svg>
+    </section>
+
+    <!-- ฝั่งขวา: ฟอร์ม -->
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" id="tab-login" aria-selected="true" aria-controls="form-login">เข้าสู่ระบบ</button>
+          <button class="tab" role="tab" id="tab-register" aria-selected="false" aria-controls="form-register">สมัครสมาชิก</button>
+        </div>
+
+        <div id="message" class="notice hidden" role="status" aria-live="polite"></div>
+
+        <form id="form-login" role="tabpanel" aria-labelledby="tab-login" novalidate>
+          <h2>ยินดีต้อนรับกลับ</h2>
+          <div class="field">
+            <label for="login-email">อีเมล</label>
+            <input id="login-email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="login-password">รหัสผ่าน</label>
+            <input id="login-password" type="password" autocomplete="current-password" required>
+          </div>
+          <button class="btn" type="submit">เข้าสู่ระบบ</button>
+        </form>
+
+        <form id="form-register" class="hidden" role="tabpanel" aria-labelledby="tab-register" novalidate>
+          <h2>สร้างบัญชีใหม่</h2>
+          <div class="field">
+            <label for="reg-name">ชื่อ-นามสกุล</label>
+            <input id="reg-name" type="text" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="reg-email">อีเมล</label>
+            <input id="reg-email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="reg-password">รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</label>
+            <input id="reg-password" type="password" autocomplete="new-password" minlength="6" required>
+          </div>
+          <button class="btn" type="submit">สมัครสมาชิก</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="js/auth.js"></script>
+</body>
+</html>

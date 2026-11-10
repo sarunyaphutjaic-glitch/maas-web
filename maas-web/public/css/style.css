@@ -1,0 +1,256 @@
+/* =========================================================
+   MaaS — สไตล์หลัก
+   แนวคิด: ป้ายบอกทางขนส่งสาธารณะ สีประจำแต่ละโหมด
+   ฟ้า = เครื่องบิน, เขียว = รถไฟฟ้า, เหลือง = รถเมล์
+   ========================================================= */
+:root {
+  --paper: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17221f;
+  --muted: #5b6b66;
+  --rule: #d6deda;
+  --air: #2f67d8;
+  --rail: #2f9a52;
+  --bus: #e0a116;
+  --danger: #c2412d;
+
+  --font: 'Anuphan', 'Noto Sans Thai', 'Leelawadee UI', system-ui, sans-serif;
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.4rem;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+h1, h2, h3 { line-height: 1.25; margin: 0 0 0.5em; font-weight: 600; }
+a { color: var(--air); }
+:focus-visible { outline: 3px solid var(--air); outline-offset: 2px; }
+.hidden { display: none !important; }
+
+/* แถบสามสีประจำระบบ */
+.mode-stripe {
+  height: 6px;
+  background: linear-gradient(90deg,
+    var(--air) 0 33.33%, var(--rail) 33.33% 66.66%, var(--bus) 66.66% 100%);
+}
+
+/* ---------- ปุ่มและฟอร์ม ---------- */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.7rem 1.1rem;
+  background: var(--ink);
+  color: #fff;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.55; cursor: progress; }
+.btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+
+.field { display: grid; gap: 0.3rem; margin-bottom: 1rem; }
+.field label { font-size: var(--step--1); color: var(--muted); }
+.field input {
+  font: inherit;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.field input:focus-visible { outline-offset: 0; }
+
+.notice {
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: var(--step--1);
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--rail);
+  background: #e9f5ed;
+}
+.notice.error { border-left-color: var(--danger); background: #fbecea; }
+
+/* ---------- หน้า Login ---------- */
+.auth-page { min-height: 100vh; display: flex; flex-direction: column; }
+.auth-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+}
+.auth-map {
+  background: var(--ink);
+  color: #fff;
+  padding: clamp(2rem, 5vw, 4rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2rem;
+}
+.auth-map h1 { font-size: var(--step-3); max-width: 18ch; }
+.auth-map p { color: #b9c6c1; max-width: 42ch; margin: 0; }
+.route-map { width: 100%; max-width: 520px; height: auto; }
+.route-map text { fill: #dfe7e4; font-family: var(--font); font-size: 15px; }
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card h2 { font-size: var(--step-2); }
+
+.tabs { display: flex; border-bottom: 1px solid var(--rule); margin-bottom: 1.5rem; }
+.tab {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0.6rem 0.2rem;
+  margin-right: 1.5rem;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+.tab[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--rail); }
+
+/* ---------- หน้าระบบหลัก ---------- */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+}
+.brand { font-weight: 700; font-size: var(--step-1); }
+.who { display: flex; align-items: center; gap: 0.75rem; font-size: var(--step--1); }
+
+.role {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--rail);
+}
+.role[data-role="admin"] { background: var(--air); }
+.role[data-role="staff"] { background: var(--bus); color: var(--ink); }
+
+.shell { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 64px); }
+.sidenav { border-right: 1px solid var(--rule); padding: 1.25rem 0.75rem; background: var(--surface); }
+.sidenav a {
+  display: block;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius);
+  color: var(--ink);
+  text-decoration: none;
+  margin-bottom: 0.25rem;
+}
+.sidenav a[aria-current="page"] { background: var(--paper); font-weight: 600; box-shadow: inset 4px 0 0 var(--rail); }
+
+main { padding: clamp(1.25rem, 3vw, 2.5rem); max-width: 1100px; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.panel h2 { font-size: var(--step-1); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1.5rem; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+
+.empty { color: var(--muted); margin: 0; }
+
+/* ---------- Dashboard / รายงาน ---------- */
+.lead { color: var(--muted); margin: -0.25rem 0 1.5rem; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
+.grid-2 .panel { margin-bottom: 0; }
+.chart-box { position: relative; height: 260px; margin-bottom: 1rem; }
+.chart-box.tall { height: 360px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.toolbar .field { flex: 1 1 240px; }
+.field select {
+  font: inherit;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+#report-table { max-height: 520px; overflow: auto; }
+#report-table th { position: sticky; top: 0; background: var(--surface); }
+
+/* ---------- จัดการข้อมูล (CRUD) ---------- */
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.75rem; }
+.panel-head h2 { margin-bottom: 0.1rem; }
+.row-actions { text-align: right; }
+.btn-small {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+.btn-small.danger { color: var(--danger); border-color: #e8c3bc; }
+.status { font-weight: 600; }
+.status[data-status="ACTIVE"]  { color: var(--rail); }
+.status[data-status="BLOCKED"] { color: var(--danger); }
+.status[data-status="EXPIRED"] { color: var(--muted); }
+
+dialog {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  width: min(440px, calc(100vw - 2rem));
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--rule), 0 20px 50px rgba(23, 34, 31, 0.25);
+}
+dialog::backdrop { background: rgba(23, 34, 31, 0.45); }
+dialog h2 { font-size: var(--step-1); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+.field select:disabled { opacity: 0.6; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* ---------- มือถือ ---------- */
+@media (max-width: 820px) {
+  .auth-layout { grid-template-columns: 1fr; }
+  .auth-map { padding: 1.75rem 1.25rem; }
+  .auth-map h1 { font-size: var(--step-2); }
+  .route-map { max-width: 360px; }
+  .shell { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .sidenav { display: flex; overflow-x: auto; gap: 0.25rem; border-right: 0; border-bottom: 1px solid var(--rule); padding: 0.5rem; }
+  .sidenav a { white-space: nowrap; margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

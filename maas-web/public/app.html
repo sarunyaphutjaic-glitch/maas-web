@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MaaS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="mode-stripe"></div>
+    <div class="topbar-inner">
+      <span class="brand">MaaS</span>
+      <div class="who">
+        <span id="who-name">กำลังโหลด…</span>
+        <span id="who-role" class="role"></span>
+        <button id="btn-logout" class="btn btn-ghost" type="button">ออกจากระบบ</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="sidenav" aria-label="เมนูหลัก">
+      <a href="#home">บัญชีของฉัน</a>
+      <a href="#dashboard">ภาพรวม</a>
+      <a href="#manage">จัดการข้อมูล</a>
+      <a href="#reports">รายงาน</a>
+      <a href="#chat">ถามข้อมูล</a>
+    </nav>
+
+    <main>
+      <!-- บัญชีของฉัน -->
+      <section id="page-home" class="page">
+        <h1>บัญชีของฉัน</h1>
+        <div class="panel">
+          <h2>ข้อมูลผู้ใช้</h2>
+          <dl class="facts">
+            <dt>ชื่อ</dt><dd id="p-name">-</dd>
+            <dt>อีเมล</dt><dd id="p-email">-</dd>
+            <dt>สิทธิ์</dt><dd id="p-role">-</dd>
+            <dt>สมาชิกตั้งแต่</dt><dd id="p-created">-</dd>
+          </dl>
+        </div>
+        <div class="panel">
+          <h2>บัตรโดยสารรถไฟฟ้า</h2>
+          <div id="cards-box"><p class="empty">กำลังโหลด…</p></div>
+        </div>
+      </section>
+
+      <!-- หน้าที่จะทำในขั้นถัดไป -->
+      <!-- ภาพรวม (Dashboard จาก View) -->
+      <section id="page-dashboard" class="page hidden">
+        <h1>ภาพรวมรถไฟฟ้า</h1>
+        <p id="dash-scope" class="lead">ข้อมูลวันที่ 1 ต.ค. – 9 พ.ย. 2569</p>
+
+        <div class="panel">
+          <h2>รายได้รายวัน</h2>
+          <p id="daily-summary" class="empty"></p>
+          <div class="chart-box"><canvas id="chart-daily" aria-label="กราฟรายได้รายวัน" role="img"></canvas></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h2>10 สถานีที่คนแตะบัตรเข้ามากที่สุด</h2>
+            <div class="chart-box tall"><canvas id="chart-stations" aria-label="กราฟสถานียอดนิยม" role="img"></canvas></div>
+          </div>
+          <div class="panel">
+            <h2>ค่าโดยสารรวมตามประเภทบัตร</h2>
+            <div class="chart-box"><canvas id="chart-cardtypes" aria-label="กราฟค่าโดยสารตามประเภทบัตร" role="img"></canvas></div>
+            <div id="cardtype-table" class="table-wrap"></div>
+          </div>
+        </div>
+      </section>
+      <!-- จัดการข้อมูล (CRUD) -->
+      <section id="page-manage" class="page hidden">
+        <h1>จัดการข้อมูล</h1>
+        <p id="manage-scope" class="lead"></p>
+
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" id="mtab-stations" aria-selected="true" aria-controls="mpanel-stations">สถานี</button>
+          <button class="tab" role="tab" id="mtab-cards" aria-selected="false" aria-controls="mpanel-cards">บัตรโดยสาร</button>
+        </div>
+
+        <div id="manage-msg" class="notice hidden" role="status" aria-live="polite"></div>
+
+        <div id="mpanel-stations" class="panel" role="tabpanel">
+          <div class="panel-head">
+            <div><h2>สถานีรถไฟฟ้า</h2><p id="stations-count" class="empty"></p></div>
+            <button id="btn-add-station" class="btn admin-only hidden" type="button">เพิ่มสถานี</button>
+          </div>
+          <div id="stations-table"><p class="empty">กำลังโหลด…</p></div>
+        </div>
+
+        <div id="mpanel-cards" class="panel hidden" role="tabpanel">
+          <div class="panel-head">
+            <div><h2>บัตรโดยสาร</h2><p id="cards-count" class="empty"></p></div>
+            <button id="btn-add-card" class="btn admin-only hidden" type="button">ออกบัตรใหม่</button>
+          </div>
+          <div class="field">
+            <label for="cards-search">ค้นหาเลขบัตร ชื่อ หรืออีเมล</label>
+            <input id="cards-search" type="search">
+          </div>
+          <div id="cards-table"><p class="empty">กำลังโหลด…</p></div>
+        </div>
+
+        <!-- ฟอร์มสถานี -->
+        <dialog id="dlg-station" aria-labelledby="dlg-station-title">
+          <form id="form-station" novalidate>
+            <h2 id="dlg-station-title">เพิ่มสถานี</h2>
+            <input type="hidden" id="st-id">
+            <div class="field"><label for="st-code">รหัสสถานี</label><input id="st-code" maxlength="10" required placeholder="เช่น E15"></div>
+            <div class="field"><label for="st-name">ชื่อสถานี</label><input id="st-name" maxlength="100" required></div>
+            <div class="field add-only-station"><label for="st-line">สาย (ต่อท้ายสาย)</label>
+              <select id="st-line"><option value="SUK">สายสุขุมวิท</option><option value="SIL">สายสีลม</option></select></div>
+            <div class="form-row add-only-station">
+              <div class="field"><label for="st-lat">ละติจูด</label><input id="st-lat" type="number" step="0.000001" placeholder="13.646000"></div>
+              <div class="field"><label for="st-lon">ลองจิจูด</label><input id="st-lon" type="number" step="0.000001" placeholder="100.596000"></div>
+            </div>
+            <div class="field"><label for="st-district">เขต</label><input id="st-district" maxlength="100"></div>
+            <div class="dialog-actions">
+              <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+              <button type="submit" class="btn" id="st-submit">เพิ่มสถานี</button>
+            </div>
+          </form>
+        </dialog>
+
+        <!-- ฟอร์มบัตรโดยสาร -->
+        <dialog id="dlg-card" aria-labelledby="dlg-card-title">
+          <form id="form-card" novalidate>
+            <h2 id="dlg-card-title">ออกบัตรใหม่</h2>
+            <input type="hidden" id="cd-id">
+            <div class="field"><label for="cd-number">เลขบัตร</label><input id="cd-number" maxlength="20" required></div>
+            <div class="field add-only-card"><label for="cd-user">เจ้าของบัตร</label><select id="cd-user"></select></div>
+            <div class="field"><label for="cd-type">ประเภทบัตร</label><select id="cd-type"></select></div>
+            <div class="field"><label for="cd-status">สถานะ</label>
+              <select id="cd-status">
+                <option value="ACTIVE">ใช้งานได้</option>
+                <option value="BLOCKED">ถูกระงับ</option>
+                <option value="EXPIRED">หมดอายุ</option>
+              </select></div>
+            <div class="dialog-actions">
+              <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+              <button type="submit" class="btn" id="cd-submit">ออกบัตร</button>
+            </div>
+          </form>
+        </dialog>
+      </section>
+      <!-- รายงาน (ตารางจาก View) -->
+      <section id="page-reports" class="page hidden">
+        <h1>รายงาน</h1>
+        <div class="panel">
+          <div class="toolbar">
+            <div class="field">
+              <label for="report-view">เลือกรายงาน</label>
+              <select id="report-view"></select>
+            </div>
+            <div class="field">
+              <label for="report-search">ค้นหาในตาราง</label>
+              <input id="report-search" type="search" placeholder="เช่น สยาม, Student, IN_JOURNEY">
+            </div>
+          </div>
+          <p id="report-count" class="empty"></p>
+          <div id="report-table"></div>
+        </div>
+      </section>
+      <section id="page-chat" class="page hidden"><h1>ถามข้อมูล</h1><p class="empty">ระบบ Chat จะอยู่ที่นี่</p></section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
