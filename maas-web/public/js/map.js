@@ -138,7 +138,9 @@ export async function initMap() {
   });
   if (map.hasLayer(layers.rail)) layers.rail.eachLayer((l) => l.bringToFront?.());
 
-  $('map-bkk').addEventListener('click', () => map.setView(BANGKOK_CENTER, 13));
+  const railBounds = L.latLngBounds(Object.values(stPos)).pad(0.05);
+  map.fitBounds(railBounds);
+  $('map-bkk').addEventListener('click', () => map.fitBounds(railBounds));
 
   // คำอธิบายสัญลักษณ์
   const legend = L.control({ position: 'bottomleft' });

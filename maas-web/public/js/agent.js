@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js';
+import { refreshBookings } from './bookings.js';
 
 // =========================================================
 // AI Agent จองตั๋วเครื่องบิน (คุยหลายรอบ + เรียกเครื่องมือจริง + ส่งอีเมล)
@@ -8,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const TOOL = {
-  search_flights: '🔍 ค้นหาเที่ยวบิน', propose_booking: '📝 ร่างการจอง', my_bookings: '🎫 ดูการจองของฉัน', plan_connection: '🧭 วางแผนต่อรถ',
+  search_flights: '🔍 ค้นหาเที่ยวบิน', propose_booking: '📝 ร่างการจอง', my_bookings: '🎫 ดูการจองของฉัน', plan_connection: '🧭 วางแผนต่อรถ', query_data: '📊 ถามข้อมูล (SQL)',
 };
 const th = (ts) => new Date(ts).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' });
 
@@ -27,10 +28,10 @@ export function initAgent() {
   $('agent-reset').addEventListener('click', () => {
     history = [];
     $('agent-log').innerHTML = '';
-    bot('สวัสดีครับ ผมคือ MaaS Agent ช่วยค้นหาและจองตั๋วเครื่องบินให้ได้ พร้อมส่งอีเมลยืนยัน อยากเดินทางไปที่ไหนครับ');
+    bot('สวัสดีครับ ผมคือ MaaS Agent ช่วยจองตั๋วเครื่องบิน (8 สนามบินในระบบ) และตอบคำถามข้อมูลการเดินทาง เช่น ค่าโดยสาร BTS หรือสายรถเมล์ อยากให้ช่วยเรื่องอะไรครับ');
   });
   $('success-close').addEventListener('click', () => $('dlg-success').close());
-  $('success-mine').addEventListener('click', () => { $('dlg-success').close(); send('ดูการจองของฉัน'); });
+  $('success-mine').addEventListener('click', () => $('dlg-success').close());
   $('agent-reset').click();
 }
 
@@ -75,12 +76,24 @@ function thinking() {
 function bot(text, events = [], isError = false) {
   const steps = (events || []).map((e) =>
     `<span class="agent-step ${e.ok ? '' : 'agent-step-err'}">${TOOL[e.tool] || e.tool} · ${esc(e.summary)}</span>`).join('');
+  const evidence = (events || []).filter((e) => e.tool === 'query_data' && e.sql).map((e) => `
+    <details class="evidence" open><summary>SQL ที่ระบบสร้าง</summary><pre><code>${esc(e.sql)}</code></pre></details>
+    ${e.rows?.length ? `<details class="evidence" ${e.rows.length <= 10 ? 'open' : ''}><summary>ตารางผลลัพธ์ (${e.rows.length} แถว)</summary>${table(e.rows)}</details>` : ''}`).join('');
   $('agent-log').insertAdjacentHTML('beforeend', `
     <div class="msg msg-bot ${isError ? 'agent-error' : ''}">
       ${steps ? `<div class="agent-steps">${steps}</div>` : ''}
       <p class="chat-answer">${esc(text)}</p>
+      ${evidence}
     </div>`);
   scroll();
+}
+
+function table(rows) {
+  const cols = Object.keys(rows[0]);
+  return `<div class="table-wrap"><table>
+    <thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td${typeof r[c] === 'number' ? ' class="num"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 // ---------- การ์ดยืนยันการจอง (ยังไม่จองจริงจนกว่าจะกดปุ่ม) ----------
@@ -149,6 +162,7 @@ async function confirmBooking(card, d) {
   remember(`[ระบบ] ผู้ใช้กดยืนยันแล้ว จองสำเร็จ รหัส ${b.booking_ref} เที่ยวบิน ${b.flight_no} flight_id ${b.flight_id} ที่นั่ง ${b.seats.join(', ')} ยอด ${b.total} บาท`,
     `จองสำเร็จแล้ว รหัส ${b.booking_ref}`);
   showSuccess(b, data.email);
+  refreshBookings();
   bot(`จองสำเร็จแล้วครับ รหัสการจอง ${b.booking_ref}` +
     (['BKK', 'DMK'].includes(b.destination) ? ' ลงเครื่องแล้วจะเดินทางต่อไปที่ไหนครับ ผมวางแผนต่อ BTS / รถเมล์ให้ได้' : ''));
 }

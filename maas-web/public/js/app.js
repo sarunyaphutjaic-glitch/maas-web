@@ -2,11 +2,11 @@ import { supabase } from './supabaseClient.js';
 import { initDashboard } from './dashboard.js';
 import { initReports } from './reports.js';
 import { initManage } from './manage.js';
-import { initChat } from './chat.js';
 import { initPlanner } from './planner.js';
 import { initMap } from './map.js';
 import { renderWallet } from './wallet.js';
 import { initAgent } from './agent.js';
+import { initBookings } from './bookings.js';
 
 const $ = (id) => document.getElementById(id);
 const ROLE_TH = { admin: 'ผู้ดูแลระบบ', staff: 'เจ้าหน้าที่', passenger: 'ผู้โดยสาร' };
@@ -47,7 +47,7 @@ if (profileErr) {
 window.currentUser = profile;
 
 // ---------- 4. สลับหน้าตามเมนู (#home, #dashboard, ...) ----------
-const PAGES = ['home', 'dashboard', 'planner', 'map', 'manage', 'reports', 'chat', 'agent'];
+const PAGES = ['home', 'dashboard', 'planner', 'map', 'manage', 'reports', 'agent', 'bookings'];
 // หน้าที่จำกัดสิทธิ์ (หน้าที่ไม่อยู่ในนี้ทุกคนเข้าได้)
 const ACCESS = { dashboard: ['admin'], reports: ['admin'], manage: ['admin', 'staff'] };
 const myRole = profile?.role ?? 'passenger';
@@ -66,10 +66,10 @@ function route() {
   if (name === 'dashboard') initDashboard(profile);
   if (name === 'reports') initReports();
   if (name === 'manage') initManage(profile);
-  if (name === 'chat') initChat(profile);
   if (name === 'planner') initPlanner();
   if (name === 'map') initMap();
   if (name === 'agent') initAgent();
+  if (name === 'bookings') initBookings(profile);
   document.querySelectorAll('.sidenav a').forEach((a) => {
     if (a.getAttribute('href') === '#' + name) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
@@ -77,6 +77,15 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 route();
+
+// ---------- นาฬิกาเวลาไทย (มุมขวาบน) ----------
+function tick() {
+  const now = new Date();
+  $('clock-date').textContent = now.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  $('clock-time').textContent = now.toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+tick();
+setInterval(tick, 1000);
 
 // ---------- 5. ออกจากระบบ ----------
 $('btn-logout').addEventListener('click', async () => {

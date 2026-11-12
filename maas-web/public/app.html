@@ -18,6 +18,11 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="brand-text">MaaS<small>Mobility as a Service</small></span>
       </a>
+      <div class="clock" aria-live="off" title="เวลาไทย (Asia/Bangkok, UTC+07)">
+        <span class="clock-icon" aria-hidden="true">🕒</span>
+        <span class="clock-text"><span id="clock-date">–</span><strong id="clock-time">–</strong></span>
+        <span class="clock-tz">GMT+7</span>
+      </div>
       <div class="who">
         <span id="who-name">กำลังโหลด…</span>
         <span id="who-role" class="role"></span>
@@ -32,8 +37,8 @@
       <a href="#home"><span class="nav-icon" aria-hidden="true">👤</span>บัญชีของฉัน</a>
       <a href="#planner"><span class="nav-icon" aria-hidden="true">🧭</span>วางแผนเดินทาง</a>
       <a href="#map"><span class="nav-icon" aria-hidden="true">🗺️</span>แผนที่</a>
-      <a href="#chat"><span class="nav-icon" aria-hidden="true">💬</span>ถามข้อมูล</a>
-      <a href="#agent"><span class="nav-icon" aria-hidden="true">🤖</span>ผู้ช่วยจองตั๋ว</a>
+      <a href="#agent"><span class="nav-icon" aria-hidden="true">🤖</span>ผู้ช่วย AI</a>
+      <a href="#bookings"><span class="nav-icon" aria-hidden="true">🎫</span>การจองของฉัน</a>
       <span class="nav-label" data-roles="admin staff">ผู้ดูแลระบบ</span>
       <a href="#dashboard" data-roles="admin"><span class="nav-icon" aria-hidden="true">📊</span>ภาพรวม</a>
       <a href="#reports" data-roles="admin"><span class="nav-icon" aria-hidden="true">📋</span>รายงาน</a>
@@ -177,16 +182,20 @@
       <section id="page-agent" class="page hidden">
         <div class="page-head">
           <div>
-            <h1>ผู้ช่วยจองตั๋ว (AI Agent)</h1>
-            <p class="lead">บอกปลายทางและวันที่ Agent จะค้นหาเที่ยวบิน สรุปให้ตรวจ จองให้หลังคุณยืนยัน แล้วส่งอีเมลยืนยันการจอง</p>
+            <h1>ผู้ช่วย AI</h1>
+            <p class="lead">จองตั๋วเครื่องบิน (8 สนามบินในระบบ) และถามข้อมูลการเดินทางด้วยภาษาธรรมชาติ ระบบแสดง SQL และตารางผลลัพธ์เป็นหลักฐานทุกครั้ง</p>
           </div>
           <button id="agent-reset" class="btn btn-ghost" type="button">เริ่มบทสนทนาใหม่</button>
         </div>
         <div id="agent-suggest" class="chat-suggest" aria-label="ตัวอย่างข้อความ">
+          <span class="suggest-label">✈️ จองตั๋ว</span>
           <button type="button">อยากไปเชียงใหม่ มีเที่ยวบินวันไหนบ้าง</button>
           <button type="button">จองไปภูเก็ต 1 คน ชั้นประหยัด จ่ายด้วย QR</button>
-          <button type="button">จองไปเชียงใหม่ 2 คน ชั้นธุรกิจ จ่ายด้วยบัตรเครดิต</button>
           <button type="button">ดูการจองของฉัน</button>
+          <span class="suggest-label">📊 ถามข้อมูล</span>
+          <button type="button">จากสยามไปอโศกค่าโดยสารเท่าไร</button>
+          <button type="button">รถเมล์สายไหนผ่านป้ายคูคต</button>
+          <button type="button">ลงรถไฟฟ้าที่หมอชิต ต่อรถเมล์สายไหนได้บ้าง</button>
         </div>
         <div class="panel chat-panel">
           <div id="agent-log" class="chat-log" aria-live="polite"></div>
@@ -201,10 +210,36 @@
         <dialog id="dlg-success" class="dlg-success" aria-labelledby="success-title">
           <div id="success-body"></div>
           <div class="dialog-actions">
-            <button id="success-mine" type="button" class="btn btn-ghost">ดูการจองของฉัน</button>
+            <a id="success-mine" class="btn btn-ghost" href="#bookings">ดูการจองของฉัน</a>
             <button id="success-close" type="button" class="btn">เสร็จสิ้น</button>
           </div>
         </dialog>
+      </section>
+
+      <!-- การจองของฉัน -->
+      <section id="page-bookings" class="page hidden">
+        <div class="page-head">
+          <div>
+            <h1>การจองของฉัน</h1>
+            <p class="lead">ประวัติการจองตั๋วเครื่องบินทั้งหมด เวลาเป็นเวลาไทย (UTC+07)</p>
+          </div>
+          <a class="btn" href="#agent">🤖 จองตั๋วใหม่</a>
+        </div>
+        <div class="kpis" id="bk-kpis"></div>
+        <div class="bk-toolbar">
+          <div id="bk-filter" class="seg" role="group" aria-label="กรองการจอง">
+            <button type="button" data-filter="upcoming" aria-pressed="true">กำลังจะเดินทาง <span>0</span></button>
+            <button type="button" data-filter="past" aria-pressed="false">เดินทางแล้ว <span>0</span></button>
+            <button type="button" data-filter="cancelled" aria-pressed="false">ยกเลิก <span>0</span></button>
+            <button type="button" data-filter="all" aria-pressed="false">ทั้งหมด <span>0</span></button>
+          </div>
+          <select id="bk-scope" class="hidden" aria-label="ขอบเขต">
+            <option value="mine">เฉพาะของฉัน</option>
+            <option value="all">ผู้ใช้ทุกคน (ผู้ดูแล)</option>
+          </select>
+          <input id="bk-search" type="search" placeholder="ค้นหารหัสการจอง เที่ยวบิน ชื่อผู้เดินทาง" aria-label="ค้นหา">
+        </div>
+        <div id="bk-list"></div>
       </section>
 
       <!-- วางแผนเดินทางข้ามระบบ -->
@@ -335,22 +370,6 @@
           </div>
           <p id="report-count" class="empty"></p>
           <div id="report-table"></div>
-        </div>
-      </section>
-      <!-- ถามข้อมูล (Chat + LLM) -->
-      <section id="page-chat" class="page hidden">
-        <h1>ถามข้อมูล</h1>
-        <p id="chat-lead" class="lead">พิมพ์คำถามเป็นภาษาไทยหรืออังกฤษ ระบบจะสร้าง SQL ดึงข้อมูลจริง แล้วตอบพร้อมหลักฐาน</p>
-
-        <div id="chat-suggest" class="chat-suggest" aria-label="ตัวอย่างคำถาม"></div>
-
-        <div class="panel chat-panel">
-          <div id="chat-log" class="chat-log" aria-live="polite"></div>
-          <form id="chat-form" class="chat-form">
-            <label for="chat-input" class="hidden">คำถาม</label>
-            <textarea id="chat-input" rows="2" maxlength="500" placeholder="เช่น วันไหนมีรายได้สูงสุด"></textarea>
-            <button id="chat-send" class="btn" type="submit">ถาม</button>
-          </form>
         </div>
       </section>
     </main>

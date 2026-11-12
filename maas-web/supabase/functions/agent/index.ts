@@ -8,6 +8,7 @@
 //   (payments + bookings + tickets ใน Transaction เดียว) → ส่งอีเมล (Human-in-the-loop)
 //   my_bookings      → ดูการจองของตัวเอง (RLS)
 //   plan_connection  → วางแผนต่อ BTS / รถเมล์ หลังลงเครื่อง (plan_trip)
+//   query_data       → ถามข้อมูลด้วยภาษาธรรมชาติ (Text-to-SQL ผ่าน run_chat_query) แสดง SQL + ตารางเป็นหลักฐาน
 // หลังจองสำเร็จ ส่งอีเมลยืนยันผ่าน Google Apps Script (Web App)
 //
 // Secrets: GEMINI_API_KEY, GEMINI_MODEL, GEMINI_FALLBACK_MODELS, APPS_SCRIPT_URL, APPS_SCRIPT_TOKEN
@@ -34,7 +35,7 @@ const TOOLS = [{
   functionDeclarations: [
     {
       name: 'search_flights',
-      description: 'ค้นหาเที่ยวบินที่ยังจองได้ (ยังไม่ออก) ตามเมืองหรือรหัสสนามบิน และวันที่',
+      description: 'ค้นหาเที่ยวบินที่ยังจองได้ (ยังไม่ออก) ระหว่างสนามบินในระบบ 8 แห่งเท่านั้น ตามที่ผู้ใช้ระบุ',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -52,11 +53,22 @@ const TOOLS = [{
         type: 'OBJECT',
         properties: {
           flight_id: { type: 'INTEGER', description: 'flight_id จากผล search_flights' },
+          origin: { type: 'STRING', description: 'สนามบินต้นทางที่ผู้ใช้ขอ (รหัสหรือชื่อเมือง) ใช้ตรวจว่าเที่ยวบินตรงตามที่ขอ' },
+          destination: { type: 'STRING', description: 'สนามบินปลายทางที่ผู้ใช้ขอ (รหัสหรือชื่อเมือง)' },
           passengers: { type: 'ARRAY', items: { type: 'STRING' }, description: 'ชื่อผู้เดินทาง 1–4 คน' },
           travel_class: { type: 'STRING', enum: ['ECONOMY', 'BUSINESS'] },
           payment_method: { type: 'STRING', enum: ['CREDIT_CARD', 'QR', 'MOBILE_BANKING'] },
         },
-        required: ['flight_id', 'passengers', 'travel_class', 'payment_method'],
+        required: ['flight_id', 'destination', 'passengers', 'travel_class', 'payment_method'],
+      },
+    },
+    {
+      name: 'query_data',
+      description: 'ตอบคำถามข้อมูลด้วย SQL SELECT คำสั่งเดียว บน View ที่อนุญาตเท่านั้น เช่น ค่าโดยสาร BTS สายรถเมล์ สถิติ ประวัติของผู้ใช้',
+      parameters: {
+        type: 'OBJECT',
+        properties: { sql: { type: 'STRING', description: 'PostgreSQL SELECT คำสั่งเดียว ไม่มี ; ท้าย ใส่ LIMIT ไม่เกิน 50' } },
+        required: ['sql'],
       },
     },
     {
@@ -80,10 +92,64 @@ const TOOLS = [{
   ],
 }];
 
-function systemPrompt(name: string) {
+const VIEWS: { name: string; who: 'public' | 'admin'; desc: string }[] = [
+  { name: 'v_fare_lookup', who: 'public', desc: `ค่าโดยสาร BTS ระหว่างสถานี
+  origin_station, origin_code, destination_station, destination_code (ชื่อสถานีภาษาไทย เช่น 'สยาม', 'อโศก'),
+  adult_fare, student_fare, senior_fare (บาท)` },
+  { name: 'v_flight_schedule', who: 'public', desc: `ตารางเที่ยวบิน
+  flight_no, origin_code, origin_city, destination_code, destination_city (เช่น 'เชียงใหม่', 'ภูเก็ต'),
+  departure_time, arrival_time, flight_date, base_price, flight_status ('SCHEDULED' | 'ARRIVED' | 'CANCELLED')
+  (รหัส: BKK สุวรรณภูมิ, DMK ดอนเมือง, CNX เชียงใหม่, HKT ภูเก็ต, HDY หาดใหญ่, KBV กระบี่, USM สมุย, UTH อุดรธานี)` },
+  { name: 'v_bus_route_stops', who: 'public', desc: `ป้ายของรถเมล์แต่ละสาย (1 แถว = 1 ป้ายในสาย) ใช้ตอบว่าสายไหนผ่านป้ายไหน
+  route_no ('2','4','15','25','29','76','77','365'), route_name, fare, sequence_no, stop_code,
+  stop_name (เช่น 'ป้ายสวนจตุจักร', 'ป้ายอโศก (เทอร์มินอล 21)'), district, near_bts_station (สถานี BTS ข้างป้าย)` },
+  { name: 'v_bus_stops_near_bts', who: 'public', desc: `ป้ายรถเมล์ใกล้สถานี BTS (ใช้ตอบเรื่องการต่อรถ)
+  bts_station, station_code, bus_stop, bus_routes (เช่น '2, 25'), distance_m` },
+  { name: 'v_trip_details', who: 'public', desc: `การเดินทาง BTS แต่ละเที่ยว (ผู้โดยสารเห็นเฉพาะของตัวเอง)
+  log_id, user_id, passenger_name, card_number, card_type ('Adult' | 'Student' | 'Senior'),
+  entry_station, exit_station, trip_date, entry_hour, entry_time, exit_time, duration_min, fare_charged,
+  status ('COMPLETED' | 'IN_JOURNEY' = ลืมแตะออก | 'CANCELLED')` },
+  { name: 'v_problem_trips', who: 'public', desc: `เที่ยว BTS ที่ลืมแตะออกหรือยกเลิก
+  log_id, passenger_name, card_number, card_type, entry_station, entry_time, status` },
+  { name: 'v_flight_bookings', who: 'public', desc: `ตั๋วเครื่องบินที่จอง (ผู้โดยสารเห็นเฉพาะของตัวเอง)
+  ticket_id, booking_ref, user_id, booker_name, passenger_name, flight_no, origin_code, origin_city,
+  destination_code, destination_city, departure_time, flight_date, travel_class ('ECONOMY' | 'BUSINESS'),
+  seat_no, price, booking_status ('CONFIRMED' | 'PENDING' | 'CANCELLED'), payment_method, flight_status` },
+  { name: 'v_bus_ride_details', who: 'public', desc: `การขึ้นรถเมล์แต่ละครั้ง (ผู้โดยสารเห็นเฉพาะของตัวเอง)
+  ride_id, user_id, passenger_name, route_no, route_name, board_stop, alight_stop, boarded_at, ride_date,
+  ride_hour, fare_paid, payment_method, bus_type ('NORMAL' | 'AIRCON' | 'EV')` },
+  { name: 'v_user_spending', who: 'public', desc: `ค่าใช้จ่ายรวมแยกโหมด (ผู้โดยสารเห็นเฉพาะของตัวเอง)
+  user_id, full_name, rail_topup, flight, bus, total_spent, modes_used` },
+  { name: 'v_station_ridership', who: 'admin', desc: `สรุปรายสถานี BTS
+  station_id, station_code, station_name, lines, entries, exits, revenue_from_entries` },
+  { name: 'v_daily_rail_revenue', who: 'admin', desc: `รายได้ BTS รายวัน
+  trip_date, total_trips, completed_trips, unique_cards, revenue, avg_fare` },
+  { name: 'v_card_type_stats', who: 'admin', desc: `สถิติตามประเภทบัตร
+  card_type, discount_rate, total_cards, avg_balance, total_trips, total_fare, avg_fare` },
+  { name: 'v_route_revenue', who: 'admin', desc: `รายได้ต่อเส้นทางบิน
+  route (เช่น 'BKK-CNX'), origin_city, destination_city, flights, tickets_sold, revenue, avg_ticket_price` },
+  { name: 'v_flight_occupancy', who: 'admin', desc: `อัตราที่นั่งเต็มต่อเที่ยวบิน
+  flight_id, flight_no, route, departure_time, flight_date, aircraft_model, total_seats, seats_sold, occupancy_pct, flight_status` },
+  { name: 'v_route_ridership', who: 'admin', desc: `สรุปรายสายรถเมล์
+  route_no, route_name, fare, scheduled_trips, completed_trips, passengers, revenue, avg_delay_min` },
+  { name: 'v_driver_workload', who: 'admin', desc: `ภาระงานพนักงานขับรถ
+  driver_id, driver_name, completed_trips, driving_hours, avg_delay_min, routes_driven` },
+  { name: 'v_payment_summary', who: 'admin', desc: `สรุปการชำระเงินรายเดือน
+  month, service_type ('RAIL_TOPUP' | 'FLIGHT' | 'BUS'), method, transactions, total_amount` },
+];
+
+function systemPrompt(name: string, role: string, airports: string) {
+  const isPassenger = role !== 'admin' && role !== 'staff';
+  const schema = VIEWS.filter((v) => !isPassenger || v.who === 'public').map((v) => `${v.name} — ${v.desc}`).join('\n\n');
   const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'full', timeStyle: 'short' });
-  return `คุณคือ "MaaS Agent" ผู้ช่วยจองตั๋วเครื่องบินของระบบ MaaS พูดภาษาไทย สุภาพ กระชับ
-ผู้ใช้ชื่อ ${name} · เวลาปัจจุบัน (เวลาไทย UTC+07): ${now}
+  return `คุณคือ "MaaS Agent" ผู้ช่วยของระบบ MaaS (รถไฟฟ้า BTS, สายการบิน, รถเมล์) พูดภาษาไทย สุภาพ กระชับ
+ผู้ใช้ชื่อ ${name} (สิทธิ์ ${isPassenger ? 'ผู้โดยสาร' : 'ผู้ดูแลระบบ'}) · เวลาปัจจุบัน (เวลาไทย UTC+07): ${now}
+
+งานที่ทำได้ 2 อย่าง
+A) จองตั๋วเครื่องบิน (จองได้เฉพาะเที่ยวบิน ไม่มีการจองรถไฟฟ้าหรือรถเมล์)
+B) ตอบคำถามข้อมูลด้วยเครื่องมือ query_data เขียน SQL บน View ที่อนุญาต แล้วสรุปคำตอบจากผลลัพธ์จริง
+
+สนามบินในระบบมีเพียง 8 แห่ง: ${airports}
 
 ขั้นตอนการทำงาน
 1. ถามข้อมูลที่ขาด: ปลายทาง วันที่ จำนวนและชื่อผู้เดินทาง ชั้นโดยสาร (ECONOMY / BUSINESS) ช่องทางชำระ
@@ -92,8 +158,22 @@ function systemPrompt(name: string) {
    และกดปุ่ม "ยืนยันการจอง" (คุณจองเองไม่ได้ การจองจริงเกิดเมื่อผู้ใช้กดปุ่มเท่านั้น)
 4. ถ้าระบบแจ้งว่าจองสำเร็จแล้ว และเที่ยวบินลงสุวรรณภูมิหรือดอนเมือง เสนอวางแผนต่อ BTS / รถเมล์ด้วย plan_connection
 
-กติกา
-- ใช้เฉพาะข้อมูลจากเครื่องมือ ห้ามแต่งเที่ยวบิน ราคา หรือรหัสการจองขึ้นเอง
+กติกาการจอง (สำคัญ)
+- ใช้สนามบินตามที่ผู้ใช้ระบุเท่านั้น ถ้าเมืองที่ผู้ใช้ขอไม่มีสนามบินในรายการ ให้บอกว่าไม่มีและแสดงรายการสนามบินที่มี
+- ห้ามเปลี่ยนไปเสนอสนามบินอื่นแทนเอง ถ้าไม่มีเที่ยวบินตรงตามที่ขอ ให้บอกว่าไม่มี แล้วถามผู้ใช้ก่อนว่าจะดูวันอื่นหรือสนามบินอื่นไหม
+- "กรุงเทพ" มี 2 สนามบิน (BKK สุวรรณภูมิ, DMK ดอนเมือง) ถ้าผู้ใช้ไม่ระบุ ให้แสดงทั้งสองแบบแยกให้ชัด
+- ตอนเรียก propose_booking ต้องส่ง origin / destination ตามที่ผู้ใช้ขอ ระบบจะตรวจว่าเที่ยวบินตรงจริง
+
+กติกาการตอบคำถามข้อมูล (query_data)
+- ใช้ได้เฉพาะ View ด้านล่าง SELECT คำสั่งเดียว ค้นข้อความด้วย ILIKE '%คำ%'
+- ผู้โดยสารถามได้เฉพาะข้อมูลสาธารณะและข้อมูลของตัวเอง ถ้าถามรายได้หรือข้อมูลคนอื่นให้ปฏิเสธ
+- ปฏิเสธคำขอแก้ไข ลบ หรือเปลี่ยนแปลงข้อมูลทุกกรณี
+
+View ที่ใช้ได้
+${schema}
+
+กติกาทั่วไป
+- ใช้เฉพาะข้อมูลจากเครื่องมือ ห้ามแต่งเที่ยวบิน ราคา ตัวเลข หรือรหัสการจองขึ้นเอง
 - ปฏิเสธเรื่องที่ไม่เกี่ยวกับการเดินทางอย่างสุภาพ
 - ห้ามบอกว่าจองสำเร็จแล้ว จนกว่าระบบจะแจ้งผลหลังผู้ใช้กดยืนยัน
 - จองได้ครั้งละ 1–4 คน และจองได้เฉพาะในชื่อบัญชีของผู้ใช้ที่ login อยู่`;
@@ -161,6 +241,24 @@ async function sendEmail(b: Record<string, unknown>) {
   }
 }
 
+// ---------- สนามบิน: แปลงคำที่ผู้ใช้พิมพ์ → รหัสสนามบินในระบบ ----------
+type Airport = { iata_code: string; airport_name: string; city: string };
+let AIRPORTS: Airport[] = [];
+const ALIAS: Record<string, string[]> = {
+  'กรุงเทพ': ['BKK', 'DMK'], 'bangkok': ['BKK', 'DMK'], 'สุวรรณภูมิ': ['BKK'], 'ดอนเมือง': ['DMK'],
+  'เชียงใหม่': ['CNX'], 'ภูเก็ต': ['HKT'], 'หาดใหญ่': ['HDY'], 'สงขลา': ['HDY'], 'กระบี่': ['KBV'],
+  'สมุย': ['USM'], 'เกาะสมุย': ['USM'], 'สุราษฎร์': ['USM'], 'อุดร': ['UTH'], 'อุดรธานี': ['UTH'],
+};
+function resolveAirport(term: string): string[] {
+  const t = String(term ?? '').trim().toLowerCase().replace(/^(สนามบิน|ท่าอากาศยาน)/, '').trim();
+  if (!t) return [];
+  const byCode = AIRPORTS.filter((a) => a.iata_code.toLowerCase() === t).map((a) => a.iata_code);
+  if (byCode.length) return byCode;
+  for (const [k, v] of Object.entries(ALIAS)) if (t.includes(k.toLowerCase())) return v;
+  return AIRPORTS.filter((a) => a.city.toLowerCase().includes(t) || a.airport_name.toLowerCase().includes(t)).map((a) => a.iata_code);
+}
+const airportList = () => AIRPORTS.map((a) => `${a.iata_code} ${a.airport_name.replace('ท่าอากาศยาน', '')}`).join(', ');
+
 // ---------- ทำงานตามเครื่องมือที่ LLM เรียก ----------
 // deno-lint-ignore no-explicit-any
 async function runTool(supabase: any, name: string, args: Record<string, any>) {
@@ -168,12 +266,14 @@ async function runTool(supabase: any, name: string, args: Record<string, any>) {
     let q = supabase.from('v_flight_schedule').select('*')
       .eq('flight_status', 'SCHEDULED').gt('departure_time', new Date().toISOString())
       .order('departure_time').limit(10);
-    const dest = String(args.destination ?? '').trim();
-    if (/^[A-Za-z]{3}$/.test(dest)) q = q.eq('destination_code', dest.toUpperCase());
-    else if (dest) q = q.ilike('destination_city', `%${dest}%`);
-    const org = String(args.origin ?? '').trim();
-    if (/^[A-Za-z]{3}$/.test(org)) q = q.eq('origin_code', org.toUpperCase());
-    else if (org) q = q.ilike('origin_city', `%${org}%`);
+    const destCodes = resolveAirport(args.destination);
+    if (!destCodes.length) return { error: `ไม่มีสนามบิน "${args.destination}" ในระบบ สนามบินที่มี: ${airportList()}` };
+    q = q.in('destination_code', destCodes);
+    if (args.origin) {
+      const orgCodes = resolveAirport(args.origin);
+      if (!orgCodes.length) return { error: `ไม่มีสนามบิน "${args.origin}" ในระบบ สนามบินที่มี: ${airportList()}` };
+      q = q.in('origin_code', orgCodes);
+    }
     if (args.date) q = q.eq('flight_date', args.date);
     const { data, error } = await q;
     if (error) return { error: error.message };
@@ -191,6 +291,14 @@ async function runTool(supabase: any, name: string, args: Record<string, any>) {
     const { data: f, error } = await supabase.from('v_flight_schedule').select('*').eq('flight_id', args.flight_id).single();
     if (error || !f) return { error: 'ไม่พบเที่ยวบิน' };
     if (f.flight_status !== 'SCHEDULED' || new Date(f.departure_time) <= new Date()) return { error: `เที่ยวบิน ${f.flight_no} จองไม่ได้แล้ว` };
+    // ตรวจว่าเที่ยวบินตรงกับสนามบินที่ผู้ใช้ขอจริง (กันการจองผิดสนามบิน)
+    const wantDest = resolveAirport(args.destination);
+    if (!wantDest.includes(f.destination_code)) {
+      return { error: `เที่ยวบิน ${f.flight_no} ไปลง ${f.destination_code} ไม่ตรงกับปลายทางที่ขอ (${args.destination})` };
+    }
+    if (args.origin && !resolveAirport(args.origin).includes(f.origin_code)) {
+      return { error: `เที่ยวบิน ${f.flight_no} ออกจาก ${f.origin_code} ไม่ตรงกับต้นทางที่ขอ (${args.origin})` };
+    }
     const each = Number(f.base_price) * (args.travel_class === 'BUSINESS' ? 2.5 : 1);
     return {
       draft: {
@@ -202,6 +310,12 @@ async function runTool(supabase: any, name: string, args: Record<string, any>) {
       },
       note: 'ร่างการจองยังไม่ถูกบันทึก รอผู้ใช้กดปุ่มยืนยัน',
     };
+  }
+  if (name === 'query_data') {
+    const { data, error } = await supabase.rpc('run_chat_query', { p_sql: String(args.sql ?? '') });
+    if (error) return { error: error.message, sql: args.sql };
+    const rows = data?.rows ?? [];
+    return { sql: args.sql, row_count: rows.length, rows: rows.slice(0, 30) };
   }
   if (name === 'my_bookings') {
     const { data, error } = await supabase.from('v_flight_bookings')
@@ -245,7 +359,11 @@ Deno.serve(async (req) => {
   );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return reply({ error: 'กรุณาเข้าสู่ระบบก่อนใช้งาน' }, 401);
-  const { data: me } = await supabase.from('users').select('user_id, full_name').eq('auth_id', user.id).single();
+  const { data: me } = await supabase.from('users').select('user_id, full_name, role').eq('auth_id', user.id).single();
+  if (!AIRPORTS.length) {
+    const { data: ap } = await supabase.from('airports').select('iata_code, airport_name, city').order('iata_code');
+    AIRPORTS = ap ?? [];
+  }
 
   const body = await req.json().catch(() => ({}));
 
@@ -273,8 +391,8 @@ Deno.serve(async (req) => {
   if (!message) return reply({ error: 'กรุณาพิมพ์ข้อความ' }, 400);
 
   const contents = [...history, { role: 'user', parts: [{ text: message }] }];
-  const system = systemPrompt(me?.full_name ?? 'ผู้ใช้');
-  const events: { tool: string; args: unknown; ok: boolean; summary: string }[] = [];
+  const system = systemPrompt(me?.full_name ?? 'ผู้ใช้', me?.role ?? 'passenger', airportList());
+  const events: { tool: string; args: unknown; ok: boolean; summary: string; sql?: string; rows?: unknown[] }[] = [];
   let proposal = null, model = MODEL, text = '';
 
   try {
@@ -301,8 +419,10 @@ Deno.serve(async (req) => {
             : name === 'search_flights' ? `พบ ${r.flights.length} เที่ยวบิน`
             : name === 'propose_booking' ? `ร่างการจอง ${r.draft.flight_no} · รอยืนยัน`
             : name === 'my_bookings' ? `พบ ${r.bookings.length} ตั๋ว`
+            : name === 'query_data' ? `ได้ ${r.row_count} แถว`
             : `รวม ${r.total_fare} บาท`,
         });
+        if (name === 'query_data') Object.assign(events[events.length - 1], { sql: r.sql, rows: r.rows ?? [] });
         responses.push({ functionResponse: { name, response: { result } } });
       }
       contents.push({ role: 'user', parts: responses });
