@@ -33,6 +33,7 @@
       <a href="#planner"><span class="nav-icon" aria-hidden="true">🧭</span>วางแผนเดินทาง</a>
       <a href="#map"><span class="nav-icon" aria-hidden="true">🗺️</span>แผนที่</a>
       <a href="#chat"><span class="nav-icon" aria-hidden="true">💬</span>ถามข้อมูล</a>
+      <a href="#agent"><span class="nav-icon" aria-hidden="true">🤖</span>ผู้ช่วยจองตั๋ว</a>
       <span class="nav-label" data-roles="admin staff">ผู้ดูแลระบบ</span>
       <a href="#dashboard" data-roles="admin"><span class="nav-icon" aria-hidden="true">📊</span>ภาพรวม</a>
       <a href="#reports" data-roles="admin"><span class="nav-icon" aria-hidden="true">📋</span>รายงาน</a>
@@ -172,6 +173,40 @@
           </div>
         </section>
       </section>
+      <!-- AI Agent จองตั๋ว -->
+      <section id="page-agent" class="page hidden">
+        <div class="page-head">
+          <div>
+            <h1>ผู้ช่วยจองตั๋ว (AI Agent)</h1>
+            <p class="lead">บอกปลายทางและวันที่ Agent จะค้นหาเที่ยวบิน สรุปให้ตรวจ จองให้หลังคุณยืนยัน แล้วส่งอีเมลยืนยันการจอง</p>
+          </div>
+          <button id="agent-reset" class="btn btn-ghost" type="button">เริ่มบทสนทนาใหม่</button>
+        </div>
+        <div id="agent-suggest" class="chat-suggest" aria-label="ตัวอย่างข้อความ">
+          <button type="button">อยากไปเชียงใหม่ มีเที่ยวบินวันไหนบ้าง</button>
+          <button type="button">จองไปภูเก็ต 1 คน ชั้นประหยัด จ่ายด้วย QR</button>
+          <button type="button">จองไปเชียงใหม่ 2 คน ชั้นธุรกิจ จ่ายด้วยบัตรเครดิต</button>
+          <button type="button">ดูการจองของฉัน</button>
+        </div>
+        <div class="panel chat-panel">
+          <div id="agent-log" class="chat-log" aria-live="polite"></div>
+          <form id="agent-form" class="chat-form">
+            <label for="agent-input" class="hidden">ข้อความ</label>
+            <textarea id="agent-input" rows="2" maxlength="500" placeholder="เช่น ไปหาดใหญ่วันที่ 15 พ.ย. 2 คน ชื่อ ..."></textarea>
+            <button id="agent-send" class="btn" type="submit">ส่ง</button>
+          </form>
+        </div>
+
+        <!-- หน้าต่างจองสำเร็จ -->
+        <dialog id="dlg-success" class="dlg-success" aria-labelledby="success-title">
+          <div id="success-body"></div>
+          <div class="dialog-actions">
+            <button id="success-mine" type="button" class="btn btn-ghost">ดูการจองของฉัน</button>
+            <button id="success-close" type="button" class="btn">เสร็จสิ้น</button>
+          </div>
+        </dialog>
+      </section>
+
       <!-- วางแผนเดินทางข้ามระบบ -->
       <section id="page-planner" class="page hidden">
         <h1>วางแผนเดินทาง</h1>
@@ -201,6 +236,7 @@
             <button id="map-all" class="btn btn-ghost" type="button">ทั้งประเทศ</button>
           </div>
         </div>
+        <p class="map-hint">💡 คลิกจุดใดก็ได้บนแผนที่ ระบบจะหาสถานี BTS ป้ายรถเมล์ และสนามบินที่ใกล้ที่สุด (สูตร Haversine)</p>
         <div id="map" class="map-box" role="region" aria-label="แผนที่สถานี ป้ายรถเมล์ และสนามบิน"></div>
       </section>
 

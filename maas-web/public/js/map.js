@@ -150,6 +150,26 @@ export async function initMap() {
   };
   legend.addTo(map);
   $('map-all').addEventListener('click', () => map.fitBounds(L.featureGroup([...layers.air.getLayers()]).getBounds().pad(0.15)));
+  // คลิกบนแผนที่ → ฟังก์ชัน nearest_points ในฐานข้อมูล (Haversine) หาจุดที่ใกล้ที่สุดของแต่ละประเภท
+  const KIND = { RAIL_STATION: '🚆 สถานี BTS', BUS_STOP: '🚌 ป้ายรถเมล์', AIRPORT: '✈️ สนามบิน' };
+  let probe = L.layerGroup().addTo(map);
+  map.on('click', async (e) => {
+    probe.clearLayers();
+    const { lat, lng } = e.latlng;
+    L.circleMarker([lat, lng], { radius: 7, color: '#7b5cd6', weight: 3, fillColor: '#fff', fillOpacity: 1 }).addTo(probe);
+    const { data, error } = await supabase.rpc('nearest_points', { p_lat: lat, p_lon: lng, p_per_type: 1 });
+    if (error) { L.popup().setLatLng(e.latlng).setContent(esc(error.message)).openOn(map); return; }
+    data.forEach((p) => {
+      L.polyline([[lat, lng], [p.latitude, p.longitude]], { color: '#7b5cd6', weight: 2, dashArray: '4 6' }).addTo(probe);
+    });
+    const fmtDist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} กม.` : `${Math.round(m)} ม.`);
+    L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(`
+      <div class="pop"><span class="pop-kind" style="background:#7b5cd6">📍 จุดที่ใกล้ที่สุด</span>
+        <span>${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+        ${data.map((p) => `<span class="near-row"><b>${KIND[p.kind]}</b> ${esc(p.name)} <em>${fmtDist(Number(p.distance_m))}</em><br><small>${esc(p.extra || '')}</small></span>`).join('')}
+      </div>`).openOn(map);
+  });
+
   $('map-note').textContent =
     `สถานี BTS ${stations.data.length} · ป้ายรถเมล์ ${stops.data.length} · สนามบิน ${airports.data.length} — ทุกจุดมาจากตาราง locations กลาง`;
 }

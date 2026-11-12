@@ -6,6 +6,7 @@ import { initChat } from './chat.js';
 import { initPlanner } from './planner.js';
 import { initMap } from './map.js';
 import { renderWallet } from './wallet.js';
+import { initAgent } from './agent.js';
 
 const $ = (id) => document.getElementById(id);
 const ROLE_TH = { admin: 'ผู้ดูแลระบบ', staff: 'เจ้าหน้าที่', passenger: 'ผู้โดยสาร' };
@@ -46,7 +47,7 @@ if (profileErr) {
 window.currentUser = profile;
 
 // ---------- 4. สลับหน้าตามเมนู (#home, #dashboard, ...) ----------
-const PAGES = ['home', 'dashboard', 'planner', 'map', 'manage', 'reports', 'chat'];
+const PAGES = ['home', 'dashboard', 'planner', 'map', 'manage', 'reports', 'chat', 'agent'];
 // หน้าที่จำกัดสิทธิ์ (หน้าที่ไม่อยู่ในนี้ทุกคนเข้าได้)
 const ACCESS = { dashboard: ['admin'], reports: ['admin'], manage: ['admin', 'staff'] };
 const myRole = profile?.role ?? 'passenger';
@@ -68,6 +69,7 @@ function route() {
   if (name === 'chat') initChat(profile);
   if (name === 'planner') initPlanner();
   if (name === 'map') initMap();
+  if (name === 'agent') initAgent();
   document.querySelectorAll('.sidenav a').forEach((a) => {
     if (a.getAttribute('href') === '#' + name) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');

@@ -577,3 +577,57 @@ dialog { border-radius: 18px; }
 .lbl-bus-right { border-right: 0 !important; border-left: 3px solid var(--bus) !important; }
 .map-legend .lbl-busno { margin: 0 4px 0 0; }
 .lbl-bus { border-right: 0 !important; border-bottom: 2px solid var(--bus) !important; background: #fffaf0 !important; }
+
+/* ---------- AI Agent ---------- */
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.agent-steps { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+.agent-step { font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 999px; background: #ece8fb; color: #4b3a99; }
+.agent-step-err { background: #fbecea; color: var(--danger); }
+.agent-error { border-left: 4px solid var(--danger); }
+.ticket { margin-top: 0.6rem; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #1d4fb8, #2f67d8 60%, #5b8ef0); color: #fff; padding: 1rem 1.1rem; box-shadow: 0 8px 22px rgba(47, 103, 216, 0.3); }
+.ticket-head { display: flex; justify-content: space-between; font-weight: 600; opacity: 0.95; }
+.ticket-ref { font-family: monospace; font-size: 1.05rem; background: rgba(255, 255, 255, 0.18); padding: 0 0.5rem; border-radius: 6px; letter-spacing: 0.06em; }
+.ticket-route { display: flex; align-items: center; gap: 0.75rem; font-size: 1.9rem; margin: 0.35rem 0 0.15rem; }
+.ticket-route span { opacity: 0.7; font-size: 1.3rem; }
+.ticket-meta { font-size: 0.88rem; opacity: 0.92; }
+.ticket-foot { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px dashed rgba(255, 255, 255, 0.45); margin-top: 0.6rem; padding-top: 0.5rem; }
+.ticket-foot strong { font-size: 1.35rem; }
+.ticket-mail { margin-top: 0.5rem; font-size: 0.85rem; background: rgba(255, 255, 255, 0.16); padding: 0.35rem 0.6rem; border-radius: 8px; }
+.ticket-mail-err { background: rgba(194, 65, 45, 0.85); }
+.map-hint { font-size: 0.9rem; color: var(--muted); margin: -0.25rem 0 0.75rem; }
+.near-row { display: block; color: var(--ink) !important; font-size: 12.5px !important; margin-top: 4px; }
+.near-row em { font-style: normal; font-weight: 700; color: #7b5cd6; }
+.leaflet-container { cursor: crosshair; }
+
+/* ---------- การ์ดยืนยันการจอง ---------- */
+.confirm-card { border: 2px solid var(--air) !important; background: var(--surface) !important; width: min(520px, 85%) !important; }
+.confirm-head { font-weight: 700; color: var(--air); margin-bottom: 0.4rem; }
+.confirm-route { display: flex; align-items: center; gap: 0.7rem; font-size: 1.6rem; margin-bottom: 0.4rem; }
+.confirm-route span { color: var(--air); font-size: 1.1rem; }
+.confirm-list { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0 0 0.6rem; font-size: 0.93rem; }
+.confirm-list dt { color: var(--muted); }
+.confirm-list dd { margin: 0; }
+.confirm-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px dashed var(--rule); padding-top: 0.5rem; }
+.confirm-total strong { font-size: 1.5rem; color: var(--air); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+.btn-confirm { background: linear-gradient(180deg, #3b74e6, var(--air)) !important; }
+.confirm-note { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--muted); }
+.confirm-status { font-weight: 600; color: var(--muted); }
+.confirm-status.ok { color: var(--rail); }
+
+/* ---------- หน้าต่างจองสำเร็จ ---------- */
+.dlg-success { width: min(500px, calc(100vw - 2rem)); text-align: center; padding: 1.75rem; }
+.success-check { width: 64px; height: 64px; margin: 0 auto 0.5rem; border-radius: 50%; display: grid; place-items: center; font-size: 2rem; font-weight: 700; color: #fff; background: var(--rail); box-shadow: 0 0 0 8px rgba(47, 154, 82, 0.15); animation: pop 0.35s ease-out; }
+@keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.dlg-success h2 { font-size: 1.6rem; margin: 0.25rem 0 0; }
+.success-sub { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.success-ref { font-family: monospace; font-size: 1.7rem; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 0.9rem; }
+.dlg-success .ticket { text-align: left; }
+.ticket-times { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.6rem; font-size: 0.88rem; }
+.ticket-times small { display: block; opacity: 0.8; font-size: 0.75rem; }
+.success-table { margin-top: 0.9rem; text-align: left; }
+.success-table tfoot td { border-bottom: 0; padding-top: 0.6rem; }
+.success-mail { margin: 0.75rem 0 0; padding: 0.55rem 0.75rem; border-radius: 10px; background: #e9f5ed; font-size: 0.9rem; }
+.success-mail.err { background: #fbecea; }
+.dlg-success .dialog-actions { justify-content: center; margin-top: 1rem; }
+@media (prefers-reduced-motion: reduce) { .success-check { animation: none; } }
