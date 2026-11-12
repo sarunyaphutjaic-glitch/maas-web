@@ -28,6 +28,10 @@ export async function initBookings(profile) {
       render();
     }));
     $('bk-search').addEventListener('input', render);
+    $('bk-list').addEventListener('click', (e) => { if (e.target.dataset.cancel) openCancel(e.target.dataset.cancel); });
+    $('cancel-close').addEventListener('click', () => $('dlg-cancel').close());
+    $('cancel-confirm').addEventListener('click', doCancel);
+    $('cancel-reason').addEventListener('change', (e) => $('cancel-other').classList.toggle('hidden', e.target.value !== 'อื่น ๆ'));
     if (me?.role === 'admin' || me?.role === 'staff') {
       $('bk-scope').classList.remove('hidden');
       $('bk-scope').addEventListener('change', (e) => { scope = e.target.value; render(); });
@@ -41,8 +45,12 @@ export function refreshBookings() { if (started) load(); }
 
 async function load() {
   $('bk-list').innerHTML = '<p class="empty">กำลังโหลด…</p>';
-  const { data, error } = await supabase.from('v_flight_bookings').select('*').order('departure_time', { ascending: false });
+  const [{ data, error }, extra] = await Promise.all([
+    supabase.from('v_flight_bookings').select('*').order('departure_time', { ascending: false }),
+    supabase.from('bookings').select('booking_ref, booked_at, cancelled_at, cancel_reason'),
+  ]);
   if (error) { $('bk-list').innerHTML = `<p class="notice error">${esc(error.message)}</p>`; return; }
+  const info = Object.fromEntries((extra.data ?? []).map((x) => [x.booking_ref, x]));
 
   // รวมตั๋วหลายใบเป็น 1 การจอง
   const map = new Map();
@@ -53,6 +61,8 @@ async function load() {
         origin: t.origin_code, origin_city: t.origin_city, destination: t.destination_code, destination_city: t.destination_city,
         departure: t.departure_time, status: t.booking_status, flight_status: t.flight_status,
         payment: t.payment_method, tickets: [],
+        booked_at: info[t.booking_ref]?.booked_at, cancelled_at: info[t.booking_ref]?.cancelled_at,
+        cancel_reason: info[t.booking_ref]?.cancel_reason,
       });
     }
     map.get(t.booking_ref).tickets.push(t);
@@ -96,6 +106,63 @@ function render() {
     </div>`;
 }
 
+// ---------- ยกเลิกการจอง ----------
+const isAdmin = () => me?.role === 'admin';
+const hoursLeft = (b) => (new Date(b.departure) - new Date()) / 3600000;
+
+function cancelArea(b, st) {
+  if (st === 'cancelled') {
+    return b.cancelled_at ? `<div class="bk-cancel-info">ยกเลิกเมื่อ ${th(b.cancelled_at, { dateStyle: 'medium', timeStyle: 'short' })} · ${esc(b.cancel_reason || '')}</div>` : '';
+  }
+  if (st !== 'upcoming' || b.status === 'CANCELLED') return '';
+  const own = b.user_id === me?.user_id;
+  if (!own && !isAdmin()) return '';
+  if (!isAdmin() && hoursLeft(b) < 24) {
+    return '<div class="bk-cancel-note">ยกเลิกเองได้ก่อนเครื่องออก 24 ชั่วโมง · ติดต่อผู้ดูแลระบบ</div>';
+  }
+  return `<button class="btn-small danger bk-cancel" type="button" data-cancel="${esc(b.ref)}">ยกเลิกการจอง</button>`;
+}
+
+let pending = null;
+function openCancel(ref) {
+  const b = bookings.find((x) => x.ref === ref);
+  if (!b) return;
+  pending = b;
+  const total = b.tickets.reduce((s, t) => s + Number(t.price), 0);
+  $('cancel-summary').innerHTML = `
+    <div class="cancel-flight"><strong>${esc(b.origin)} → ${esc(b.destination)}</strong> · ${esc(b.flight_no)}</div>
+    <div>${th(b.departure, { dateStyle: 'full', timeStyle: 'short' })} (เวลาไทย)</div>
+    <div>รหัสการจอง <b>${esc(b.ref)}</b> · ผู้เดินทาง ${b.tickets.length} คน</div>
+    <div class="cancel-refund">ยอดคืนเงิน <strong>${baht(total)}</strong> <small>คืนช่องทางเดิม</small></div>`;
+  $('cancel-reason').value = 'เปลี่ยนแผนการเดินทาง';
+  $('cancel-other').value = '';
+  $('cancel-error').classList.add('hidden');
+  $('dlg-cancel').showModal();
+}
+
+async function doCancel() {
+  const reason = $('cancel-reason').value === 'อื่น ๆ' ? ($('cancel-other').value.trim() || 'อื่น ๆ') : $('cancel-reason').value;
+  const btn = $('cancel-confirm');
+  btn.disabled = true;
+  btn.textContent = 'กำลังยกเลิก…';
+  const { data, error } = await supabase.functions.invoke('agent', { body: { action: 'cancel', booking_ref: pending.ref, reason } });
+  let msg = data?.error;
+  if (error) { msg = error.message; try { msg = (await error.context.json()).error || msg; } catch { /* ใช้ข้อความเดิม */ } }
+  btn.disabled = false;
+  btn.textContent = 'ยืนยันยกเลิก';
+  if (msg) {
+    $('cancel-error').textContent = msg;
+    $('cancel-error').classList.remove('hidden');
+    return;
+  }
+  $('dlg-cancel').close();
+  $('bk-toast').innerHTML = `ยกเลิกการจอง <b>${esc(data.cancelled.booking_ref)}</b> แล้ว · คืนเงิน ${baht(data.cancelled.refund)}` +
+    (data.email?.sent ? ` · ส่งอีเมลแจ้งไปที่ ${esc(data.email.to)}` : '');
+  $('bk-toast').classList.remove('hidden');
+  setTimeout(() => $('bk-toast').classList.add('hidden'), 6000);
+  await load();
+}
+
 function card(b) {
   const st = state(b);
   const label = { upcoming: 'กำลังจะเดินทาง', past: 'เดินทางแล้ว', cancelled: 'ยกเลิก' }[st];
@@ -112,7 +179,8 @@ function card(b) {
         <div class="bk-ref"><small>รหัสการจอง</small>${esc(b.ref)}</div>
         ${scope === 'all' ? `<div class="bk-booker">ผู้จอง: ${esc(b.booker)}</div>` : ''}
         <ul class="bk-pax">${b.tickets.map((t) => `<li>${esc(t.passenger_name)} <b>${esc(t.seat_no)}</b> <em>${CLASS_TH[t.travel_class] || esc(t.travel_class)}</em></li>`).join('')}</ul>
-        <div class="bk-total"><span>${PAY_TH[b.payment] || esc(b.payment || '')}</span><strong>${baht(total)}</strong></div>
+        <div class="bk-total"><span>${PAY_TH[b.payment] || esc(b.payment || '')}${st === 'cancelled' && b.status === 'CANCELLED' ? ' · คืนเงินแล้ว' : ''}</span><strong>${baht(total)}</strong></div>
+        ${cancelArea(b, st)}
       </div>
     </article>`;
 }

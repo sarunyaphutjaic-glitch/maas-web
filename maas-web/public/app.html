@@ -239,7 +239,30 @@
           </select>
           <input id="bk-search" type="search" placeholder="ค้นหารหัสการจอง เที่ยวบิน ชื่อผู้เดินทาง" aria-label="ค้นหา">
         </div>
+        <p id="bk-toast" class="notice bk-toast hidden" role="status"></p>
         <div id="bk-list"></div>
+
+        <!-- หน้าต่างยืนยันยกเลิก -->
+        <dialog id="dlg-cancel" class="dlg-cancel" aria-labelledby="cancel-title">
+          <h2 id="cancel-title">ยกเลิกการจอง?</h2>
+          <div id="cancel-summary" class="cancel-summary"></div>
+          <div class="field">
+            <label for="cancel-reason">เหตุผล</label>
+            <select id="cancel-reason">
+              <option>เปลี่ยนแผนการเดินทาง</option>
+              <option>จองผิดวันหรือผิดเที่ยวบิน</option>
+              <option>เจ็บป่วย / ติดธุระ</option>
+              <option>อื่น ๆ</option>
+            </select>
+            <input id="cancel-other" class="hidden" type="text" maxlength="150" placeholder="ระบุเหตุผล">
+          </div>
+          <p class="cancel-policy">ผู้โดยสารยกเลิกเองได้ก่อนเครื่องออกอย่างน้อย 24 ชั่วโมง คืนเงินเต็มจำนวน การยกเลิกย้อนกลับไม่ได้</p>
+          <p id="cancel-error" class="notice error hidden" role="alert"></p>
+          <div class="dialog-actions">
+            <button id="cancel-close" type="button" class="btn btn-ghost">ไม่ยกเลิก</button>
+            <button id="cancel-confirm" type="button" class="btn btn-danger">ยืนยันยกเลิก</button>
+          </div>
+        </dialog>
       </section>
 
       <!-- วางแผนเดินทางข้ามระบบ -->

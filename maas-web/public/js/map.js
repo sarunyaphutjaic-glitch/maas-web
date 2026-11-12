@@ -9,6 +9,55 @@ const COLOR = { SUK: '#7cc242', SIL: '#1d7a46', air: '#2f67d8', bus: '#e0a116', 
 const BANGKOK_CENTER = [13.738, 100.552];
 
 let map;
+let stats = '';
+let trackSource = 'กำลังโหลดแนวรางจาก OpenStreetMap…';
+const updateNote = () => { $('map-note').textContent = `${stats} — จุดทั้งหมดมาจากตาราง locations · เส้น BTS: ${trackSource}`; };
+
+// ---------- แนวราง BTS จริงจาก OpenStreetMap (Overpass API) ----------
+// ดึง route relation ของรถไฟฟ้า BTS ในกรอบกรุงเทพฯ แล้วแยกเป็นสายสุขุมวิท / สีลม · เก็บ cache ในเบราว์เซอร์ 30 วัน
+const TRACK_CACHE = 'maas-bts-tracks-v1';
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS_QUERY = `[out:json][timeout:25];
+relation["route"~"^(train|subway|light_rail|monorail)$"](13.50,100.40,13.98,100.70);
+out geom;`;
+
+function lineOf(tags = {}) {
+  const t = [tags.name, tags['name:en'], tags['name:th'], tags.ref, tags.network, tags.operator].join(' ').toLowerCase();
+  if (!/bts|บีทีเอส/.test(t) && !/sukhumvit|สุขุมวิท|silom|สีลม/.test(t)) return null;
+  if (/sukhumvit|สุขุมวิท/.test(t)) return 'SUK';
+  if (/silom|สีลม/.test(t)) return 'SIL';
+  return null;
+}
+
+async function loadRealTracks() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(TRACK_CACHE) || 'null');
+    if (cached && Date.now() - cached.at < 30 * 86400000) return cached.lines;
+  } catch { /* ไม่มี cache */ }
+
+  for (const url of OVERPASS) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(OVERPASS_QUERY), signal: AbortSignal.timeout(25000) });
+      if (!res.ok) continue;
+      const json = await res.json();
+      const lines = { SUK: [], SIL: [] };
+      const seen = new Set();
+      (json.elements || []).forEach((rel) => {
+        const code = lineOf(rel.tags);
+        if (!code) return;
+        (rel.members || []).forEach((m) => {
+          if (m.type !== 'way' || !m.geometry || /platform|stop/.test(m.role || '') || seen.has(m.ref)) return;
+          seen.add(m.ref);
+          lines[code].push(m.geometry.map((p) => [p.lat, p.lon]));
+        });
+      });
+      if (!lines.SUK.length && !lines.SIL.length) continue;
+      try { localStorage.setItem(TRACK_CACHE, JSON.stringify({ at: Date.now(), lines })); } catch { /* เก็บไม่ได้ก็ใช้ต่อได้ */ }
+      return lines;
+    } catch { /* ลองเซิร์ฟเวอร์ถัดไป */ }
+  }
+  return null;
+}
 const layers = {};
 
 export async function initMap() {
@@ -52,11 +101,28 @@ export async function initMap() {
 
   // ---------- เส้นและสถานี BTS ----------
   layers.rail = L.layerGroup();
+  // เส้นราง: ใช้แนวรางจริงจาก OpenStreetMap ถ้าโหลดไม่ได้จะใช้เส้นตรงต่อสถานีตามลำดับใน station_sequences
   const byLine = {};
   seqs.data.forEach((r) => { (byLine[r.lines.code] ||= { name: r.lines.line_name, pts: [] }).pts.push(stPos[r.station_id]); });
-  Object.entries(byLine).forEach(([code, line]) => {
-    L.polyline(line.pts, { color: COLOR[code] || COLOR.SIL, weight: 6, opacity: 0.9 })
-      .bindTooltip(line.name, { sticky: true, className: 'lbl-line' }).addTo(layers.rail);
+  const tracks = L.layerGroup().addTo(layers.rail);
+  const drawStraight = () => {
+    tracks.clearLayers();
+    Object.entries(byLine).forEach(([code, line]) => {
+      L.polyline(line.pts, { color: COLOR[code] || COLOR.SIL, weight: 7, opacity: 0.95, lineCap: 'round' })
+        .bindTooltip(line.name, { sticky: true, className: 'lbl-line' }).addTo(tracks);
+    });
+  };
+  drawStraight();
+  loadRealTracks().then((real) => {
+    if (!real) { trackSource = 'เส้นตรงระหว่างสถานี (โหลดแนวรางจาก OpenStreetMap ไม่สำเร็จ)'; updateNote(); return; }
+    tracks.clearLayers();
+    Object.entries(real).forEach(([code, segs]) => {
+      L.polyline(segs, { color: COLOR[code], weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' })
+        .bindTooltip(byLine[code]?.name || code, { sticky: true, className: 'lbl-line' }).addTo(tracks);
+    });
+    layers.rail.eachLayer((l) => l !== tracks && l.bringToFront?.());   // สถานีอยู่บนเส้น
+    trackSource = 'แนวรางจริงจาก OpenStreetMap';
+    updateNote();
   });
   // สายรถเมล์ที่จอดป้ายข้างสถานี (ป้ายรหัส B-<รหัสสถานี>)
   const routesOf = (stopId) => routeStops.data.filter((r) => r.stop_id === stopId)
@@ -179,6 +245,6 @@ export async function initMap() {
       </div>`).openOn(map);
   });
 
-  $('map-note').textContent =
-    `สถานี BTS ${stations.data.length} · ป้ายรถเมล์ ${stops.data.length} · สนามบิน ${airports.data.length} — ทุกจุดมาจากตาราง locations กลาง`;
+  stats = `สถานี BTS ${stations.data.length} · ป้ายรถเมล์ ${stops.data.length} · สนามบิน ${airports.data.length}`;
+  updateNote();
 }

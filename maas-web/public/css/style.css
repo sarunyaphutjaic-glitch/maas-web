@@ -692,3 +692,19 @@ dialog { border-radius: 18px; }
   #clock-date, .clock-tz { display: none; }
 }
 a.btn { text-decoration: none; display: inline-block; }
+
+/* ---------- ยกเลิกการจอง ---------- */
+.bk-cancel { align-self: flex-end; margin-top: 0.4rem; }
+.bk-cancel-note { font-size: 0.78rem; color: var(--muted); text-align: right; margin-top: 0.3rem; }
+.bk-cancel-info { font-size: 0.8rem; color: var(--danger); margin-top: 0.3rem; }
+.bk-toast { background: #e9f5ed; border-left: 4px solid var(--rail); }
+.dlg-cancel { width: min(460px, calc(100vw - 2rem)); padding: 1.5rem; }
+.dlg-cancel h2 { color: var(--danger); margin-top: 0; }
+.cancel-summary { display: grid; gap: 0.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: var(--paper); margin-bottom: 1rem; font-size: 0.93rem; }
+.cancel-flight { font-size: 1.1rem; }
+.cancel-refund { margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px dashed var(--rule); }
+.cancel-refund strong { font-size: 1.2rem; color: var(--rail); }
+.cancel-refund small { color: var(--muted); }
+#cancel-other { margin-top: 0.5rem; }
+.cancel-policy { font-size: 0.8rem; color: var(--muted); }
+.btn-danger { background: linear-gradient(180deg, #d4553f, var(--danger)) !important; }

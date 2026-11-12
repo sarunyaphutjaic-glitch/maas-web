@@ -208,9 +208,12 @@ async function callGemini(contents: unknown[], system: string) {
 // ---------- อีเมลยืนยันผ่าน Google Apps Script ----------
 const th = (ts: string) => new Date(ts).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'short' });
 async function sendEmail(b: Record<string, unknown>) {
-  if (!MAIL_URL) return { sent: false, reason: 'ยังไม่ได้ตั้งค่า APPS_SCRIPT_URL' };
+  return postMail(b.email as string, `ยืนยันการจอง ${b.booking_ref} · ${b.flight_no}`, bookingHtml(b));
+}
+
+function bookingHtml(b: Record<string, unknown>) {
   const passengers = (b.passengers as string[]).map((p, i) => `<li>${p} — ที่นั่ง ${(b.seats as string[])[i]}</li>`).join('');
-  const html = `
+  return `
     <div style="font-family:sans-serif;max-width:560px">
       <h2 style="margin:0 0 8px">ยืนยันการจองตั๋วเครื่องบิน ✈️</h2>
       <p>เรียนคุณ ${b.name}<br>ระบบ MaaS ได้รับการจองของคุณเรียบร้อยแล้ว</p>
@@ -225,17 +228,38 @@ async function sendEmail(b: Record<string, unknown>) {
       <p><b>ผู้เดินทาง</b></p><ul>${passengers}</ul>
       <p style="color:#777;font-size:12px">อีเมลนี้ส่งอัตโนมัติจาก MaaS Agent · AIE313 Database System</p>
     </div>`;
+}
+
+function cancelHtml(c: Record<string, unknown>) {
+  return `
+    <div style="font-family:sans-serif;max-width:560px">
+      <h2 style="margin:0 0 8px;color:#c2412d">แจ้งยกเลิกการจอง</h2>
+      <p>เรียนคุณ ${c.name}<br>การจองของคุณถูกยกเลิกแล้ว${c.cancelled_by_admin ? ' โดยผู้ดูแลระบบ' : ''}</p>
+      <table cellpadding="6" style="border-collapse:collapse;border:1px solid #ddd">
+        <tr><td><b>รหัสการจอง</b></td><td><b style="font-size:18px">${c.booking_ref}</b></td></tr>
+        <tr><td>เที่ยวบิน</td><td>${c.flight_no} · ${c.origin} (${c.origin_city}) → ${c.destination} (${c.destination_city})</td></tr>
+        <tr><td>กำหนดออกเดิม</td><td>${th(c.departure_time as string)} (เวลาไทย)</td></tr>
+        <tr><td>ผู้เดินทาง</td><td>${(c.passengers as string[]).join('<br>')}</td></tr>
+        <tr><td>เหตุผล</td><td>${c.reason}</td></tr>
+        <tr><td>ยอดคืนเงิน</td><td><b>${Number(c.refund).toLocaleString('th-TH')} บาท</b> (คืนช่องทางเดิม)</td></tr>
+      </table>
+      <p style="color:#777;font-size:12px">อีเมลนี้ส่งอัตโนมัติจาก MaaS Agent · AIE313 Database System</p>
+    </div>`;
+}
+
+async function postMail(to: string, subject: string, html: string) {
+  if (!MAIL_URL) return { sent: false, reason: 'ยังไม่ได้ตั้งค่า APPS_SCRIPT_URL' };
   try {
     const res = await fetch(MAIL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: MAIL_TOKEN, to: b.email, subject: `ยืนยันการจอง ${b.booking_ref} · ${b.flight_no}`, html }),
+      body: JSON.stringify({ token: MAIL_TOKEN, to, subject, html }),
       redirect: 'follow',
     });
     const text = await res.text();
     let ok = res.ok;
     try { ok = ok && JSON.parse(text).ok === true; } catch { /* Apps Script อาจตอบเป็นหน้า HTML */ }
-    return ok ? { sent: true, to: b.email } : { sent: false, reason: text.slice(0, 200) };
+    return ok ? { sent: true, to } : { sent: false, reason: text.slice(0, 200) };
   } catch (e) {
     return { sent: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -383,6 +407,19 @@ Deno.serve(async (req) => {
       status: 'SUCCESS', llm_model: null, latency_ms: null,
     });
     return reply({ booking: data, email });
+  }
+
+  // ---------- ยกเลิกการจอง (กฎ 24 ชั่วโมง / สิทธิ์ผู้ดูแล ตรวจในฟังก์ชัน cancel_booking) ----------
+  if (body.action === 'cancel') {
+    const { data, error } = await supabase.rpc('cancel_booking', { p_booking_ref: body.booking_ref, p_reason: body.reason ?? null });
+    if (error) return reply({ error: error.message });
+    const email = await postMail(data.email, `ยกเลิกการจอง ${data.booking_ref} · ${data.flight_no}`, cancelHtml(data));
+    await supabase.from('chat_logs').insert({
+      user_id: me?.user_id ?? null, question: '[agent] ยกเลิกการจอง ' + data.booking_ref,
+      generated_sql: `cancel_booking('${data.booking_ref}')`, answer: `ยกเลิกแล้ว คืนเงิน ${data.refund} บาท`,
+      row_count: 1, status: 'SUCCESS', llm_model: null, latency_ms: null,
+    });
+    return reply({ cancelled: data, email });
   }
 
   const message = String(body.message ?? '').slice(0, 500);
