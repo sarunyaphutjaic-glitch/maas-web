@@ -10,152 +10,39 @@ const BANGKOK_CENTER = [13.738, 100.552];
 
 let map;
 let stats = '';
-let trackSource = 'กำลังโหลดแนวรางจาก OpenStreetMap…';
+let trackSource = 'กำลังโหลดแนวราง…';
 let realTracks = null;   // แนวราง BTS จาก OSM { SUK: [[[lat,lon],...],...], SIL: [...] }
 const updateNote = () => { $('map-note').textContent = `${stats} — จุดทั้งหมดมาจากตาราง locations · เส้น BTS: ${trackSource}`; };
 
-// ---------- แนวราง BTS จริงจาก OpenStreetMap (Overpass API) ----------
-// ดึง route relation ของรถไฟฟ้า BTS ในกรอบกรุงเทพฯ แล้วแยกเป็นสายสุขุมวิท / สีลม · เก็บ cache ในเบราว์เซอร์ 30 วัน
-const TRACK_CACHE = 'maas-bts-tracks-v1';
-const OVERPASS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-];
-// ส่งคำค้นแบบ GET (?data=...) เป็น simple request ไม่ติด CORS preflight และทุกเซิร์ฟเวอร์ Overpass รองรับ
-const overpass = (url, query) =>
-  fetch(`${url}?data=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(30000) });
-const OVERPASS_QUERY = `[out:json][timeout:25];
-relation["route"~"^(train|subway|light_rail|monorail)$"](13.50,100.40,13.98,100.70);
-out geom;`;
-
-function lineOf(tags = {}) {
-  const t = [tags.name, tags['name:en'], tags['name:th'], tags.ref, tags.network, tags.operator].join(' ').toLowerCase();
-  if (!/bts|บีทีเอส/.test(t) && !/sukhumvit|สุขุมวิท|silom|สีลม/.test(t)) return null;
-  if (/sukhumvit|สุขุมวิท/.test(t)) return 'SUK';
-  if (/silom|สีลม/.test(t)) return 'SIL';
-  return null;
+// ---------- แนวราง BTS จากตาราง rail_tracks ----------
+// ข้อมูลแนวรางมาจาก OpenStreetMap แต่ผู้ดูแลเป็นคนนำเข้า (Edge Function ดึงฝั่งเซิร์ฟเวอร์) แล้วเก็บในฐานข้อมูล
+// หน้าแผนที่จึงอ่านจากฐานข้อมูลอย่างเดียว ไม่ต้องเรียกเซิร์ฟเวอร์ภายนอกจากเบราว์เซอร์
+async function loadRealTracks() {
+  const { data, error } = await supabase.from('rail_tracks').select('geometry, updated_at, lines(code)');
+  if (error || !data?.length) return null;
+  const lines = {};
+  data.forEach((r) => { lines[r.lines.code] = r.geometry; });
+  return lines;
 }
 
-// ---------- ตำแหน่งสถานีจริงจาก OpenStreetMap (ผู้ดูแลกดปรับพิกัดในฐานข้อมูล) ----------
-const OVERPASS_STATIONS = `[out:json][timeout:25];
-(node["railway"="station"](13.50,100.40,13.98,100.70);
- node["public_transport"="station"](13.50,100.40,13.98,100.70););
-out;`;
-const norm = (s) => String(s || '').replace(/^สถานี/, '').replace(/[\s.ฯ()\-–]/g, '').toLowerCase();
-
-// จับคู่สถานีของเรากับ node ใน OSM: ชื่อตรงกัน > ชื่อขึ้นต้นเหมือนกัน · มีคำว่า BTS ได้คะแนนเพิ่ม · ห่างจากพิกัดเดิมไม่เกิน 3 กม.
-function matchStations(ours, nodes) {
-  const result = [], missing = [];
-  ours.forEach((st) => {
-    const want = norm(st.station_name);
-    let best = null;
-    nodes.forEach((n) => {
-      const t = n.tags || {};
-      const names = [t.name, t['name:th']].map(norm).filter(Boolean);
-      let score = 0;
-      if (names.includes(want)) score = 3;
-      else if (names.some((x) => x.startsWith(want) || want.startsWith(x))) score = 2;
-      if (!score) return;
-      if (/bts/i.test([t.network, t.operator, t['name:en'], t.name].join(' '))) score += 1;
-      const d = Math.hypot(n.lat - st.lat, (n.lon - st.lon) * Math.cos(st.lat * Math.PI / 180)) * 111320;
-      if (d > 3000) return;
-      if (!best || score > best.score || (score === best.score && d < best.d)) best = { score, d, n };
-    });
-    if (best) result.push({ code: st.station_code, lat: best.n.lat, lon: best.n.lon, moved_m: Math.round(best.d) });
-    else missing.push(st.station_name);
-  });
-  return { result, missing };
-}
-
-// จุดบนแนวรางที่ใกล้ที่สุด (ฉายจุดลงบนแต่ละช่วงของเส้น ในระนาบท้องถิ่นหน่วยเมตร)
-function snapToTrack(lat, lon, segments) {
-  const kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
-  let best = null;
-  segments.forEach((seg) => {
-    for (let i = 0; i < seg.length - 1; i++) {
-      const ax = (seg[i][1] - lon) * kx, ay = (seg[i][0] - lat) * ky;
-      const bx = (seg[i + 1][1] - lon) * kx, by = (seg[i + 1][0] - lat) * ky;
-      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
-      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
-      const px = ax + t * dx, py = ay + t * dy, d = Math.hypot(px, py);
-      if (!best || d < best.d) best = { d, lat: lat + py / ky, lon: lon + px / kx };
-    }
-  });
-  return best;
-}
-
-async function syncStationsFromOSM(stationsData, lineCodesOf) {
+// ผู้ดูแลกด: Edge Function ดึงแนวรางและตำแหน่งสถานีจาก OpenStreetMap → ปรับพิกัดใน locations + บันทึก rail_tracks
+async function syncFromOSM() {
   const btn = $('map-sync');
   const status = $('map-sync-status');
+  if (!confirm('ดึงแนวรางและตำแหน่งสถานี BTS จริงจาก OpenStreetMap แล้วบันทึกพิกัดใหม่ลงฐานข้อมูลไหม (ใช้เวลาประมาณ 10–40 วินาที)')) return;
   btn.disabled = true;
-  status.textContent = 'กำลังค้นหาตำแหน่งสถานีจาก OpenStreetMap…';
-  let nodes = null;
-  for (const url of OVERPASS) {
-    try {
-      const res = await overpass(url, OVERPASS_STATIONS);
-      if (res.ok) { nodes = (await res.json()).elements || []; break; }
-    } catch { /* ลองเซิร์ฟเวอร์ถัดไป */ }
-  }
-  if (!nodes) { status.textContent = 'เชื่อมต่อ OpenStreetMap ไม่สำเร็จ ลองใหม่อีกครั้ง'; btn.disabled = false; return; }
-
-  const ours = stationsData.map((s) => ({ station_code: s.station_code, station_name: s.station_name, lat: Number(s.locations.latitude), lon: Number(s.locations.longitude) }));
-  const { result, missing } = matchStations(ours, nodes);
-  const matched = result.length;
-
-  // สถานีที่จับคู่ชื่อไม่ได้ → ดึงเข้าหาแนวรางของสายนั้นที่ใกล้ที่สุด
-  const snapped = [];
-  if (realTracks) {
-    ours.filter((st) => missing.includes(st.station_name)).forEach((st) => {
-      const segs = (lineCodesOf[st.station_code] || ['SUK', 'SIL']).flatMap((c) => realTracks[c] || []);
-      const p = snapToTrack(st.lat, st.lon, segs);
-      if (p && p.d < 3000) { result.push({ code: st.station_code, lat: p.lat, lon: p.lon, moved_m: Math.round(p.d) }); snapped.push(st.station_name); }
-    });
-  }
-  const still = missing.filter((n) => !snapped.includes(n));
-  const avg = result.length ? Math.round(result.reduce((a, r) => a + r.moved_m, 0) / result.length) : 0;
-  const ok = confirm(`ปรับพิกัดได้ ${result.length} จาก ${ours.length} สถานี (คลาดเคลื่อนเดิมเฉลี่ย ${avg} เมตร)\n` +
-    `• ตำแหน่งสถานีจริงจาก OSM: ${matched} สถานี\n` +
-    (snapped.length ? `• ดึงเข้าหาแนวราง: ${snapped.join(', ')}\n` : '') +
-    (still.length ? `• คงพิกัดเดิม: ${still.join(', ')}\n` : '') + '\nบันทึกพิกัดใหม่ลงฐานข้อมูลไหม');
-  if (!ok) { status.textContent = 'ยกเลิกการปรับพิกัด'; btn.disabled = false; return; }
-
-  const { data, error } = await supabase.rpc('sync_station_locations', { p_points: result.map(({ code, lat, lon }) => ({ code, lat, lon })) });
-  if (error) { status.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; btn.disabled = false; return; }
-  status.textContent = `ปรับพิกัดแล้ว ${data.stations_updated} สถานี · ย้ายป้ายรถเมล์ ${data.bus_stops_moved} ป้าย · กำลังโหลดแผนที่ใหม่…`;
-  setTimeout(() => location.reload(), 1200);
+  status.textContent = '⏳ เซิร์ฟเวอร์กำลังดึงข้อมูลจาก OpenStreetMap…';
+  const { data, error } = await supabase.functions.invoke('agent', { body: { action: 'sync_osm' } });
+  let msg = data?.error;
+  if (error) { msg = error.message; try { msg = (await error.context.json()).error || msg; } catch { /* ใช้ข้อความเดิม */ } }
+  if (msg) { status.textContent = '❌ ' + msg; btn.disabled = false; return; }
+  const r = data.result;
+  status.textContent = `✅ ปรับพิกัด ${r.stations_updated} สถานี (ตรงตามชื่อใน OSM ${r.matched_by_name}` +
+    (r.snapped_to_track.length ? ` · ดึงเข้าหาราง ${r.snapped_to_track.length}` : '') + `) · ย้ายป้ายรถเมล์ ${r.bus_stops_moved} ป้าย` +
+    ` · แนวราง สุขุมวิท ${r.track_segments.SUK} ช่วง สีลม ${r.track_segments.SIL} ช่วง` +
+    (r.kept.length ? ` · คงพิกัดเดิม: ${r.kept.join(', ')}` : '') + ' · กำลังโหลดแผนที่ใหม่…';
+  setTimeout(() => location.reload(), 2500);
 }
-
-async function loadRealTracks() {
-  try {
-    const cached = JSON.parse(localStorage.getItem(TRACK_CACHE) || 'null');
-    if (cached && Date.now() - cached.at < 30 * 86400000) return cached.lines;
-  } catch { /* ไม่มี cache */ }
-
-  for (const url of OVERPASS) {
-    try {
-      const res = await overpass(url, OVERPASS_QUERY);
-      if (!res.ok) continue;
-      const json = await res.json();
-      const lines = { SUK: [], SIL: [] };
-      const seen = new Set();
-      (json.elements || []).forEach((rel) => {
-        const code = lineOf(rel.tags);
-        if (!code) return;
-        (rel.members || []).forEach((m) => {
-          if (m.type !== 'way' || !m.geometry || /platform|stop/.test(m.role || '') || seen.has(m.ref)) return;
-          seen.add(m.ref);
-          lines[code].push(m.geometry.map((p) => [p.lat, p.lon]));
-        });
-      });
-      if (!lines.SUK.length && !lines.SIL.length) continue;
-      try { localStorage.setItem(TRACK_CACHE, JSON.stringify({ at: Date.now(), lines })); } catch { /* เก็บไม่ได้ก็ใช้ต่อได้ */ }
-      return lines;
-    } catch { /* ลองเซิร์ฟเวอร์ถัดไป */ }
-  }
-  return null;
-}
-const layers = {};
 
 export async function initMap() {
   if (map) { map.invalidateSize(); return; }
@@ -211,7 +98,7 @@ export async function initMap() {
   };
   drawStraight();
   loadRealTracks().then((real) => {
-    if (!real) { trackSource = 'เส้นตรงระหว่างสถานี (โหลดแนวรางจาก OpenStreetMap ไม่สำเร็จ)'; updateNote(); return; }
+    if (!real) { trackSource = 'เส้นตรงระหว่างสถานี (ยังไม่ได้นำเข้าแนวราง · ผู้ดูแลกดปุ่ม 📍 เพื่อนำเข้าจาก OpenStreetMap)'; updateNote(); return; }
     realTracks = real;
     tracks.clearLayers();
     Object.entries(real).forEach(([code, segs]) => {
@@ -219,7 +106,7 @@ export async function initMap() {
         .bindTooltip(byLine[code]?.name || code, { sticky: true, className: 'lbl-line' }).addTo(tracks);
     });
     layers.rail.eachLayer((l) => l !== tracks && l.bringToFront?.());   // สถานีอยู่บนเส้น
-    trackSource = 'แนวรางจริงจาก OpenStreetMap';
+    trackSource = 'แนวรางจริงจาก OpenStreetMap (ตาราง rail_tracks)';
     updateNote();
   });
   // สายรถเมล์ที่จอดป้ายข้างสถานี (ป้ายรหัส B-<รหัสสถานี>)
@@ -302,10 +189,7 @@ export async function initMap() {
   });
   if (map.hasLayer(layers.rail)) layers.rail.eachLayer((l) => l.bringToFront?.());
 
-  $('map-sync')?.addEventListener('click', () => {
-    if (!realTracks) { $('map-sync-status').textContent = 'รอให้แนวรางจาก OpenStreetMap โหลดเสร็จก่อน แล้วกดอีกครั้ง'; return; }
-    syncStationsFromOSM(stations.data, Object.fromEntries(stations.data.map((x) => [x.station_code, linesOf[x.station_id]])));
-  });
+  $('map-sync')?.addEventListener('click', syncFromOSM);
   const railBounds = L.latLngBounds(Object.values(stPos)).pad(0.05);
   map.fitBounds(railBounds);
   $('map-bkk').addEventListener('click', () => map.fitBounds(railBounds));

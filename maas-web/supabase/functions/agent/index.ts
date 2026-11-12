@@ -265,6 +265,117 @@ async function postMail(to: string, subject: string, html: string) {
   }
 }
 
+// ---------- OpenStreetMap: ดึงแนวรางและตำแหน่งสถานี BTS (ฝั่งเซิร์ฟเวอร์) ----------
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+const BBOX = '13.50,100.40,13.98,100.70';
+const Q_TRACKS = `[out:json][timeout:60];relation["route"~"^(train|subway|light_rail|monorail)$"](${BBOX});out geom;`;
+const Q_STATIONS = `[out:json][timeout:60];(node["railway"="station"](${BBOX});node["public_transport"="station"](${BBOX}););out;`;
+
+// deno-lint-ignore no-explicit-any
+async function overpass(query: string): Promise<any[]> {
+  let last = '';
+  for (const url of OVERPASS) {
+    try {
+      const res = await fetch(`${url}?data=${encodeURIComponent(query)}`, {
+        headers: { 'User-Agent': 'MaaS-AIE313/1.0 (university project)' },
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (res.ok) return (await res.json()).elements ?? [];
+      last = `HTTP ${res.status}`;
+    } catch (e) { last = e instanceof Error ? e.message : String(e); }
+  }
+  throw new Error('เชื่อมต่อ OpenStreetMap ไม่สำเร็จ: ' + last);
+}
+
+function lineOf(tags: Record<string, string> = {}) {
+  const t = [tags.name, tags['name:en'], tags['name:th'], tags.ref, tags.network, tags.operator].join(' ').toLowerCase();
+  if (/sukhumvit|สุขุมวิท/.test(t) && (/bts|บีทีเอส|sukhumvit line|สายสุขุมวิท/.test(t))) return 'SUK';
+  if (/silom|สีลม/.test(t) && (/bts|บีทีเอส|silom line|สายสีลม/.test(t))) return 'SIL';
+  return null;
+}
+const normName = (s: string) => String(s || '').replace(/^สถานี/, '').replace(/[\s.ฯ()\-–]/g, '').toLowerCase();
+
+// จุดบนแนวรางที่ใกล้ที่สุด (ระนาบท้องถิ่น หน่วยเมตร)
+function snapToTrack(lat: number, lon: number, segs: number[][][]) {
+  const kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
+  let best: { d: number; lat: number; lon: number } | null = null;
+  for (const seg of segs) for (let i = 0; i < seg.length - 1; i++) {
+    const ax = (seg[i][1] - lon) * kx, ay = (seg[i][0] - lat) * ky;
+    const bx = (seg[i + 1][1] - lon) * kx, by = (seg[i + 1][0] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+    const px = ax + t * dx, py = ay + t * dy, d = Math.hypot(px, py);
+    if (!best || d < best.d) best = { d, lat: lat + py / ky, lon: lon + px / kx };
+  }
+  return best;
+}
+
+// deno-lint-ignore no-explicit-any
+async function syncFromOSM(supabase: any) {
+  const [rels, nodes] = await Promise.all([overpass(Q_TRACKS), overpass(Q_STATIONS)]);
+
+  // 1) แนวราง: way ทั้งหมดใน route relation ของสายสุขุมวิท / สีลม (ไม่เอา platform/stop และไม่ซ้ำ)
+  const tracks: Record<string, number[][][]> = { SUK: [], SIL: [] };
+  const seen = new Set<number>();
+  for (const rel of rels) {
+    const code = lineOf(rel.tags);
+    if (!code) continue;
+    for (const m of rel.members ?? []) {
+      if (m.type !== 'way' || !m.geometry || /platform|stop/.test(m.role || '') || seen.has(m.ref)) continue;
+      seen.add(m.ref);
+      tracks[code].push(m.geometry.map((p: { lat: number; lon: number }) => [Number(p.lat.toFixed(6)), Number(p.lon.toFixed(6))]));
+    }
+  }
+  if (!tracks.SUK.length && !tracks.SIL.length) throw new Error('ไม่พบแนวราง BTS ในข้อมูล OpenStreetMap');
+
+  // 2) สถานีของเรา + สายที่สถานีอยู่
+  const { data: st } = await supabase.from('stations').select('station_id, station_code, station_name, locations(latitude, longitude)');
+  const { data: seq } = await supabase.from('station_sequences').select('station_id, lines(code)');
+  const linesOf: Record<number, string[]> = {};
+  (seq ?? []).forEach((r: { station_id: number; lines: { code: string } }) => { (linesOf[r.station_id] ||= []).push(r.lines.code); });
+
+  const points: { code: string; lat: number; lon: number }[] = [];
+  const byName: string[] = [], snapped: string[] = [], kept: string[] = [];
+  for (const s of st ?? []) {
+    const lat = Number(s.locations.latitude), lon = Number(s.locations.longitude);
+    const segs = (linesOf[s.station_id] ?? ['SUK', 'SIL']).flatMap((c) => tracks[c] ?? []);
+    // ก) จับคู่ชื่อกับ node สถานีใน OSM (ชื่อตรง > ขึ้นต้นเหมือน · มีคำว่า BTS ได้คะแนนเพิ่ม · ห่างเดิมไม่เกิน 3 กม.)
+    const want = normName(s.station_name);
+    let best: { score: number; d: number; lat: number; lon: number } | null = null;
+    for (const n of nodes) {
+      const t = n.tags ?? {};
+      const names = [t.name, t['name:th']].map(normName).filter(Boolean);
+      let score = names.includes(want) ? 3 : names.some((x: string) => x.startsWith(want) || want.startsWith(x)) ? 2 : 0;
+      if (!score) continue;
+      if (/bts/i.test([t.network, t.operator, t['name:en'], t.name].join(' '))) score += 1;
+      const d = Math.hypot(n.lat - lat, (n.lon - lon) * Math.cos(lat * Math.PI / 180)) * 111320;
+      if (d > 3000) continue;
+      if (!best || score > best.score || (score === best.score && d < best.d)) best = { score, d, lat: n.lat, lon: n.lon };
+    }
+    // ข) ถ้าพบชื่อ ใช้ตำแหน่งนั้นแล้วดึงเข้าหาราง (สถานีใน OSM บางจุดเป็นตัวอาคาร) / ถ้าไม่พบ ดึงพิกัดเดิมเข้าหาราง
+    const base = best ?? { lat, lon };
+    const onTrack = segs.length ? snapToTrack(base.lat, base.lon, segs) : null;
+    const final = onTrack && onTrack.d < 3000 ? onTrack : base;
+    if (best) byName.push(s.station_name); else if (onTrack && onTrack.d < 3000) snapped.push(s.station_name); else { kept.push(s.station_name); continue; }
+    points.push({ code: s.station_code, lat: Number(final.lat.toFixed(6)), lon: Number(final.lon.toFixed(6)) });
+  }
+
+  const sync = await supabase.rpc('sync_station_locations', { p_points: points });
+  if (sync.error) throw new Error(sync.error.message);
+  const save = await supabase.rpc('save_rail_tracks', { p_tracks: tracks });
+  if (save.error) throw new Error(save.error.message);
+
+  return {
+    stations_updated: sync.data.stations_updated, bus_stops_moved: sync.data.bus_stops_moved,
+    track_segments: { SUK: tracks.SUK.length, SIL: tracks.SIL.length },
+    matched_by_name: byName.length, snapped_to_track: snapped, kept,
+  };
+}
+
 // ---------- สนามบิน: แปลงคำที่ผู้ใช้พิมพ์ → รหัสสนามบินในระบบ ----------
 type Airport = { iata_code: string; airport_name: string; city: string };
 let AIRPORTS: Airport[] = [];
@@ -407,6 +518,16 @@ Deno.serve(async (req) => {
       status: 'SUCCESS', llm_model: null, latency_ms: null,
     });
     return reply({ booking: data, email });
+  }
+
+  // ---------- ผู้ดูแล: ดึงแนวรางและตำแหน่งสถานีจาก OpenStreetMap ----------
+  if (body.action === 'sync_osm') {
+    if (me?.role !== 'admin') return reply({ error: 'เฉพาะผู้ดูแลระบบเท่านั้น' });
+    try {
+      return reply({ result: await syncFromOSM(supabase) });
+    } catch (e) {
+      return reply({ error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   // ---------- ยกเลิกการจอง (กฎ 24 ชั่วโมง / สิทธิ์ผู้ดูแล ตรวจในฟังก์ชัน cancel_booking) ----------
