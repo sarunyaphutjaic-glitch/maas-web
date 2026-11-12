@@ -11,12 +11,20 @@ const BANGKOK_CENTER = [13.738, 100.552];
 let map;
 let stats = '';
 let trackSource = 'กำลังโหลดแนวรางจาก OpenStreetMap…';
+let realTracks = null;   // แนวราง BTS จาก OSM { SUK: [[[lat,lon],...],...], SIL: [...] }
 const updateNote = () => { $('map-note').textContent = `${stats} — จุดทั้งหมดมาจากตาราง locations · เส้น BTS: ${trackSource}`; };
 
 // ---------- แนวราง BTS จริงจาก OpenStreetMap (Overpass API) ----------
 // ดึง route relation ของรถไฟฟ้า BTS ในกรอบกรุงเทพฯ แล้วแยกเป็นสายสุขุมวิท / สีลม · เก็บ cache ในเบราว์เซอร์ 30 วัน
 const TRACK_CACHE = 'maas-bts-tracks-v1';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+// ส่งคำค้นแบบ GET (?data=...) เป็น simple request ไม่ติด CORS preflight และทุกเซิร์ฟเวอร์ Overpass รองรับ
+const overpass = (url, query) =>
+  fetch(`${url}?data=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(30000) });
 const OVERPASS_QUERY = `[out:json][timeout:25];
 relation["route"~"^(train|subway|light_rail|monorail)$"](13.50,100.40,13.98,100.70);
 out geom;`;
@@ -60,7 +68,24 @@ function matchStations(ours, nodes) {
   return { result, missing };
 }
 
-async function syncStationsFromOSM(stationsData) {
+// จุดบนแนวรางที่ใกล้ที่สุด (ฉายจุดลงบนแต่ละช่วงของเส้น ในระนาบท้องถิ่นหน่วยเมตร)
+function snapToTrack(lat, lon, segments) {
+  const kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
+  let best = null;
+  segments.forEach((seg) => {
+    for (let i = 0; i < seg.length - 1; i++) {
+      const ax = (seg[i][1] - lon) * kx, ay = (seg[i][0] - lat) * ky;
+      const bx = (seg[i + 1][1] - lon) * kx, by = (seg[i + 1][0] - lat) * ky;
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+      const px = ax + t * dx, py = ay + t * dy, d = Math.hypot(px, py);
+      if (!best || d < best.d) best = { d, lat: lat + py / ky, lon: lon + px / kx };
+    }
+  });
+  return best;
+}
+
+async function syncStationsFromOSM(stationsData, lineCodesOf) {
   const btn = $('map-sync');
   const status = $('map-sync-status');
   btn.disabled = true;
@@ -68,7 +93,7 @@ async function syncStationsFromOSM(stationsData) {
   let nodes = null;
   for (const url of OVERPASS) {
     try {
-      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(OVERPASS_STATIONS), signal: AbortSignal.timeout(25000) });
+      const res = await overpass(url, OVERPASS_STATIONS);
       if (res.ok) { nodes = (await res.json()).elements || []; break; }
     } catch { /* ลองเซิร์ฟเวอร์ถัดไป */ }
   }
@@ -76,9 +101,23 @@ async function syncStationsFromOSM(stationsData) {
 
   const ours = stationsData.map((s) => ({ station_code: s.station_code, station_name: s.station_name, lat: Number(s.locations.latitude), lon: Number(s.locations.longitude) }));
   const { result, missing } = matchStations(ours, nodes);
+  const matched = result.length;
+
+  // สถานีที่จับคู่ชื่อไม่ได้ → ดึงเข้าหาแนวรางของสายนั้นที่ใกล้ที่สุด
+  const snapped = [];
+  if (realTracks) {
+    ours.filter((st) => missing.includes(st.station_name)).forEach((st) => {
+      const segs = (lineCodesOf[st.station_code] || ['SUK', 'SIL']).flatMap((c) => realTracks[c] || []);
+      const p = snapToTrack(st.lat, st.lon, segs);
+      if (p && p.d < 3000) { result.push({ code: st.station_code, lat: p.lat, lon: p.lon, moved_m: Math.round(p.d) }); snapped.push(st.station_name); }
+    });
+  }
+  const still = missing.filter((n) => !snapped.includes(n));
   const avg = result.length ? Math.round(result.reduce((a, r) => a + r.moved_m, 0) / result.length) : 0;
-  const ok = confirm(`พบตำแหน่งจริง ${result.length} จาก ${ours.length} สถานี (คลาดเคลื่อนเดิมเฉลี่ย ${avg} เมตร)` +
-    (missing.length ? `\nไม่พบ: ${missing.join(', ')} (คงพิกัดเดิม)` : '') + '\n\nบันทึกพิกัดใหม่ลงฐานข้อมูลไหม');
+  const ok = confirm(`ปรับพิกัดได้ ${result.length} จาก ${ours.length} สถานี (คลาดเคลื่อนเดิมเฉลี่ย ${avg} เมตร)\n` +
+    `• ตำแหน่งสถานีจริงจาก OSM: ${matched} สถานี\n` +
+    (snapped.length ? `• ดึงเข้าหาแนวราง: ${snapped.join(', ')}\n` : '') +
+    (still.length ? `• คงพิกัดเดิม: ${still.join(', ')}\n` : '') + '\nบันทึกพิกัดใหม่ลงฐานข้อมูลไหม');
   if (!ok) { status.textContent = 'ยกเลิกการปรับพิกัด'; btn.disabled = false; return; }
 
   const { data, error } = await supabase.rpc('sync_station_locations', { p_points: result.map(({ code, lat, lon }) => ({ code, lat, lon })) });
@@ -95,7 +134,7 @@ async function loadRealTracks() {
 
   for (const url of OVERPASS) {
     try {
-      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(OVERPASS_QUERY), signal: AbortSignal.timeout(25000) });
+      const res = await overpass(url, OVERPASS_QUERY);
       if (!res.ok) continue;
       const json = await res.json();
       const lines = { SUK: [], SIL: [] };
@@ -173,6 +212,7 @@ export async function initMap() {
   drawStraight();
   loadRealTracks().then((real) => {
     if (!real) { trackSource = 'เส้นตรงระหว่างสถานี (โหลดแนวรางจาก OpenStreetMap ไม่สำเร็จ)'; updateNote(); return; }
+    realTracks = real;
     tracks.clearLayers();
     Object.entries(real).forEach(([code, segs]) => {
       L.polyline(segs, { color: COLOR[code], weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' })
@@ -262,7 +302,10 @@ export async function initMap() {
   });
   if (map.hasLayer(layers.rail)) layers.rail.eachLayer((l) => l.bringToFront?.());
 
-  $('map-sync')?.addEventListener('click', () => syncStationsFromOSM(stations.data));
+  $('map-sync')?.addEventListener('click', () => {
+    if (!realTracks) { $('map-sync-status').textContent = 'รอให้แนวรางจาก OpenStreetMap โหลดเสร็จก่อน แล้วกดอีกครั้ง'; return; }
+    syncStationsFromOSM(stations.data, Object.fromEntries(stations.data.map((x) => [x.station_code, linesOf[x.station_id]])));
+  });
   const railBounds = L.latLngBounds(Object.values(stPos)).pad(0.05);
   map.fitBounds(railBounds);
   $('map-bkk').addEventListener('click', () => map.fitBounds(railBounds));
