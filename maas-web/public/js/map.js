@@ -25,10 +25,17 @@ export async function initMap() {
   };
   map.on('zoomend', zoomClass);
   zoomClass();
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd',
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  }).addTo(map);
+  // ภาพแผนที่พื้นหลัง (Tile Layer) ของ Leaflet: OpenStreetMap ใช้ฟรี ไม่ต้องมี API key
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  });
+  const osmHot = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    maxZoom: 19, subdomains: 'abc',
+    attribution: '&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
+  });
+  osm.addTo(map);
+  L.control.layers({ 'OpenStreetMap (มาตรฐาน)': osm, 'OpenStreetMap (HOT)': osmHot }, null, { position: 'topright' }).addTo(map);
 
   const [stations, seqs, stops, routeStops, airports] = await Promise.all([
     supabase.from('stations').select('station_id, station_code, station_name, locations(latitude, longitude, district)'),
