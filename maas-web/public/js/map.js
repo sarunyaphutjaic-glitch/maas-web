@@ -9,6 +9,7 @@ const COLOR = { SUK: '#7cc242', SIL: '#1d7a46', air: '#2f67d8', bus: '#e0a116', 
 const BANGKOK_CENTER = [13.738, 100.552];
 
 let map;
+const layers = {};
 let stats = '';
 let trackSource = 'กำลังโหลดแนวราง…';
 let realTracks = null;   // แนวราง BTS จาก OSM { SUK: [[[lat,lon],...],...], SIL: [...] }
