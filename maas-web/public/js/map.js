@@ -29,6 +29,64 @@ function lineOf(tags = {}) {
   return null;
 }
 
+// ---------- ตำแหน่งสถานีจริงจาก OpenStreetMap (ผู้ดูแลกดปรับพิกัดในฐานข้อมูล) ----------
+const OVERPASS_STATIONS = `[out:json][timeout:25];
+(node["railway"="station"](13.50,100.40,13.98,100.70);
+ node["public_transport"="station"](13.50,100.40,13.98,100.70););
+out;`;
+const norm = (s) => String(s || '').replace(/^สถานี/, '').replace(/[\s.ฯ()\-–]/g, '').toLowerCase();
+
+// จับคู่สถานีของเรากับ node ใน OSM: ชื่อตรงกัน > ชื่อขึ้นต้นเหมือนกัน · มีคำว่า BTS ได้คะแนนเพิ่ม · ห่างจากพิกัดเดิมไม่เกิน 3 กม.
+function matchStations(ours, nodes) {
+  const result = [], missing = [];
+  ours.forEach((st) => {
+    const want = norm(st.station_name);
+    let best = null;
+    nodes.forEach((n) => {
+      const t = n.tags || {};
+      const names = [t.name, t['name:th']].map(norm).filter(Boolean);
+      let score = 0;
+      if (names.includes(want)) score = 3;
+      else if (names.some((x) => x.startsWith(want) || want.startsWith(x))) score = 2;
+      if (!score) return;
+      if (/bts/i.test([t.network, t.operator, t['name:en'], t.name].join(' '))) score += 1;
+      const d = Math.hypot(n.lat - st.lat, (n.lon - st.lon) * Math.cos(st.lat * Math.PI / 180)) * 111320;
+      if (d > 3000) return;
+      if (!best || score > best.score || (score === best.score && d < best.d)) best = { score, d, n };
+    });
+    if (best) result.push({ code: st.station_code, lat: best.n.lat, lon: best.n.lon, moved_m: Math.round(best.d) });
+    else missing.push(st.station_name);
+  });
+  return { result, missing };
+}
+
+async function syncStationsFromOSM(stationsData) {
+  const btn = $('map-sync');
+  const status = $('map-sync-status');
+  btn.disabled = true;
+  status.textContent = 'กำลังค้นหาตำแหน่งสถานีจาก OpenStreetMap…';
+  let nodes = null;
+  for (const url of OVERPASS) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(OVERPASS_STATIONS), signal: AbortSignal.timeout(25000) });
+      if (res.ok) { nodes = (await res.json()).elements || []; break; }
+    } catch { /* ลองเซิร์ฟเวอร์ถัดไป */ }
+  }
+  if (!nodes) { status.textContent = 'เชื่อมต่อ OpenStreetMap ไม่สำเร็จ ลองใหม่อีกครั้ง'; btn.disabled = false; return; }
+
+  const ours = stationsData.map((s) => ({ station_code: s.station_code, station_name: s.station_name, lat: Number(s.locations.latitude), lon: Number(s.locations.longitude) }));
+  const { result, missing } = matchStations(ours, nodes);
+  const avg = result.length ? Math.round(result.reduce((a, r) => a + r.moved_m, 0) / result.length) : 0;
+  const ok = confirm(`พบตำแหน่งจริง ${result.length} จาก ${ours.length} สถานี (คลาดเคลื่อนเดิมเฉลี่ย ${avg} เมตร)` +
+    (missing.length ? `\nไม่พบ: ${missing.join(', ')} (คงพิกัดเดิม)` : '') + '\n\nบันทึกพิกัดใหม่ลงฐานข้อมูลไหม');
+  if (!ok) { status.textContent = 'ยกเลิกการปรับพิกัด'; btn.disabled = false; return; }
+
+  const { data, error } = await supabase.rpc('sync_station_locations', { p_points: result.map(({ code, lat, lon }) => ({ code, lat, lon })) });
+  if (error) { status.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; btn.disabled = false; return; }
+  status.textContent = `ปรับพิกัดแล้ว ${data.stations_updated} สถานี · ย้ายป้ายรถเมล์ ${data.bus_stops_moved} ป้าย · กำลังโหลดแผนที่ใหม่…`;
+  setTimeout(() => location.reload(), 1200);
+}
+
 async function loadRealTracks() {
   try {
     const cached = JSON.parse(localStorage.getItem(TRACK_CACHE) || 'null');
@@ -204,6 +262,7 @@ export async function initMap() {
   });
   if (map.hasLayer(layers.rail)) layers.rail.eachLayer((l) => l.bringToFront?.());
 
+  $('map-sync')?.addEventListener('click', () => syncStationsFromOSM(stations.data));
   const railBounds = L.latLngBounds(Object.values(stPos)).pad(0.05);
   map.fitBounds(railBounds);
   $('map-bkk').addEventListener('click', () => map.fitBounds(railBounds));
